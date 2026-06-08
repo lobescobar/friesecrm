@@ -17,6 +17,10 @@ export function useAuth() {
         .eq('id', userId)
         .maybeSingle();
 
+      if (error) {
+        console.error('Erro ao buscar profile:', error);
+      }
+
       // Se não existir perfil no banco
       if (!data) {
 
