@@ -208,7 +208,10 @@ function CRMContent() {
     );
   }
 
-  if (!profile) return null;
+  if (!profile) {
+  router.replace("/login");
+  return null;
+}
 
   const handleAdicionarContato = async () => {
     if (!clienteSelecionado || !novoContato.nome) return;
