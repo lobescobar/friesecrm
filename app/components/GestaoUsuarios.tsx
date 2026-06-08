@@ -4,12 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { Profile } from "../../types";
 
-const ESTADOS_BR = [
-  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES",
-  "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR",
-  "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC",
-  "SP", "SE", "TO"
-];
+const ESTADOS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 const SEGMENTOS = [
   "AGROINDUSTRIA",
@@ -27,12 +22,7 @@ type MultiSelectProps = {
   onSalvar: (valores: string[]) => Promise<boolean>;
 };
 
-function MultiSelect({
-  titulo,
-  opcoes,
-  selecionados,
-  onSalvar
-}: MultiSelectProps) {
+function MultiSelect({ titulo, opcoes, selecionados, onSalvar }: MultiSelectProps) {
   const [aberto, setAberto] = useState(false);
   const [busca, setBusca] = useState("");
   const [valores, setValores] = useState<string[]>([]);
@@ -46,26 +36,16 @@ function MultiSelect({
     item.toLowerCase().includes(busca.toLowerCase())
   );
 
-  const todosSelecionados =
-    opcoes.length > 0 &&
-    opcoes.every((item) => valores.includes(item));
+  const todosSelecionados = opcoes.length > 0 && opcoes.every((item) => valores.includes(item));
 
   const toggleValor = (valor: string) => {
-    setValores((atual) => {
-      if (atual.includes(valor)) {
-        return atual.filter((v) => v !== valor);
-      }
-
-      return [...atual, valor];
-    });
+    setValores((atual) =>
+      atual.includes(valor) ? atual.filter((v) => v !== valor) : [...atual, valor]
+    );
   };
 
   const toggleTodos = () => {
-    if (todosSelecionados) {
-      setValores([]);
-    } else {
-      setValores([...opcoes]);
-    }
+    setValores(todosSelecionados ? [] : [...opcoes]);
   };
 
   const cancelar = () => {
@@ -77,7 +57,6 @@ function MultiSelect({
 
   const salvar = async () => {
     if (salvando) return;
-
     setSalvando(true);
 
     try {
@@ -102,18 +81,13 @@ function MultiSelect({
         onClick={() => setAberto(!aberto)}
         className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white text-left flex justify-between items-center hover:bg-slate-50"
       >
-        <span>
-          {selecionados?.length || 0} selecionado(s)
-        </span>
-
+        <span>{selecionados?.length || 0} selecionado(s)</span>
         <span>▼</span>
       </button>
 
       {aberto && (
         <div className="absolute z-50 mt-2 w-72 bg-white border border-slate-300 rounded-2xl shadow-xl p-3">
-          <div className="font-bold text-sm mb-2">
-            {titulo}
-          </div>
+          <div className="font-bold text-sm mb-2">{titulo}</div>
 
           <input
             type="text"
@@ -125,19 +99,12 @@ function MultiSelect({
 
           <div className="max-h-56 overflow-y-auto border border-slate-100 rounded-xl p-2">
             <label className="flex items-center gap-2 mb-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={todosSelecionados}
-                onChange={toggleTodos}
-              />
+              <input type="checkbox" checked={todosSelecionados} onChange={toggleTodos} />
               Selecionar tudo
             </label>
 
             {opcoesFiltradas.map((item) => (
-              <label
-                key={item}
-                className="flex items-center gap-2 py-1 cursor-pointer"
-              >
+              <label key={item} className="flex items-center gap-2 py-1 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={valores.includes(item)}
@@ -190,20 +157,25 @@ export default function GestaoUsuarios() {
   const carregarUsuarios = async () => {
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .order("email", { ascending: true });
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("email", { ascending: true });
 
-    if (error) {
-      console.warn("Erro ao carregar usuários:", error?.message || error);
-      alert("Erro ao carregar usuários.");
+      if (error) {
+        console.warn("Erro ao carregar usuários:", error?.message || error);
+        alert("Erro ao carregar usuários.");
+        return;
+      }
+
+      setUsuarios((data || []) as Profile[]);
+    } catch (error: any) {
+      console.error(error);
+      alert(error.message || "Erro inesperado ao carregar usuários.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setUsuarios((data || []) as Profile[]);
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -216,34 +188,18 @@ export default function GestaoUsuarios() {
     valores: string[]
   ) => {
     setUsuarios((atual) =>
-      atual.map((usuario) => {
-        if (usuario.id === id) {
-          return {
-            ...usuario,
-            [campo]: valores
-          };
-        }
-
-        return usuario;
-      })
+      atual.map((usuario) =>
+        usuario.id === id ? { ...usuario, [campo]: valores } : usuario
+      )
     );
   };
 
-  const atualizarEstados = async (
-    id: string,
-    estados: string[]
-  ): Promise<boolean> => {
-    atualizarUsuarioLocal(
-      id,
-      "estados_permitidos",
-      estados
-    );
+  const atualizarEstados = async (id: string, estados: string[]): Promise<boolean> => {
+    atualizarUsuarioLocal(id, "estados_permitidos", estados);
 
     const { error } = await supabase
       .from("profiles")
-      .update({
-        estados_permitidos: estados
-      })
+      .update({ estados_permitidos: estados })
       .eq("id", id);
 
     if (error) {
@@ -256,21 +212,12 @@ export default function GestaoUsuarios() {
     return true;
   };
 
-  const atualizarSegmentos = async (
-    id: string,
-    segmentos: string[]
-  ): Promise<boolean> => {
-    atualizarUsuarioLocal(
-      id,
-      "segmentos_permitidos",
-      segmentos
-    );
+  const atualizarSegmentos = async (id: string, segmentos: string[]): Promise<boolean> => {
+    atualizarUsuarioLocal(id, "segmentos_permitidos", segmentos);
 
     const { error } = await supabase
       .from("profiles")
-      .update({
-        segmentos_permitidos: segmentos
-      })
+      .update({ segmentos_permitidos: segmentos })
       .eq("id", id);
 
     if (error) {
@@ -283,10 +230,7 @@ export default function GestaoUsuarios() {
     return true;
   };
 
-  const atualizarRole = async (
-    id: string,
-    role: PerfilUsuario
-  ) => {
+  const atualizarRole = async (id: string, role: PerfilUsuario) => {
     const { error } = await supabase
       .from("profiles")
       .update({ role })
@@ -315,9 +259,7 @@ export default function GestaoUsuarios() {
     try {
       const response = await fetch("/api/admin/create-user", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: novoEmail,
           password: novaSenha,
@@ -349,7 +291,6 @@ export default function GestaoUsuarios() {
       setNovoRole("vendedor");
 
       await carregarUsuarios();
-
     } catch (error: any) {
       console.error(error);
       alert(error.message || "Erro interno ao cadastrar usuário.");
@@ -360,36 +301,24 @@ export default function GestaoUsuarios() {
     <div className="bg-white rounded-3xl border border-slate-200 shadow-lg p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-2xl font-bold">
-            Gestão de Usuários
-          </h2>
-
-          <p className="text-sm text-slate-500">
-            Controle de permissões
-          </p>
+          <h2 className="text-2xl font-bold">Gestão de Usuários</h2>
+          <p className="text-sm text-slate-500">Controle de permissões</p>
         </div>
 
-        <button
-          onClick={carregarUsuarios}
-          className="px-4 py-2 border border-slate-300 rounded-2xl"
-        >
+        <button onClick={carregarUsuarios} className="px-4 py-2 border border-slate-300 rounded-2xl">
           Atualizar
         </button>
       </div>
 
       <div className="bg-slate-50 rounded-3xl border border-slate-200 p-5 mb-6">
-        <h3 className="text-lg font-bold mb-4">
-          Novo usuário
-        </h3>
+        <h3 className="text-lg font-bold mb-4">Novo usuário</h3>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <input
             type="email"
             placeholder="E-mail"
             value={novoEmail}
-            onChange={(e) =>
-              setNovoEmail(e.target.value)
-            }
+            onChange={(e) => setNovoEmail(e.target.value)}
             className="border border-slate-300 rounded-2xl px-4 py-3"
           />
 
@@ -397,34 +326,20 @@ export default function GestaoUsuarios() {
             type="password"
             placeholder="Senha"
             value={novaSenha}
-            onChange={(e) =>
-              setNovaSenha(e.target.value)
-            }
+            onChange={(e) => setNovaSenha(e.target.value)}
             className="border border-slate-300 rounded-2xl px-4 py-3"
           />
 
           <select
             value={novoRole}
-            onChange={(e) =>
-              setNovoRole(
-                e.target.value as PerfilUsuario
-              )
-            }
+            onChange={(e) => setNovoRole(e.target.value as PerfilUsuario)}
             className="border border-slate-300 rounded-2xl px-4 py-3"
           >
-            <option value="vendedor">
-              Vendedor
-            </option>
-
-            <option value="admin">
-              Administrador
-            </option>
+            <option value="vendedor">Vendedor</option>
+            <option value="admin">Administrador</option>
           </select>
 
-          <button
-            onClick={cadastrarUsuario}
-            className="bg-slate-900 text-white rounded-2xl font-bold"
-          >
+          <button onClick={cadastrarUsuario} className="bg-slate-900 text-white rounded-2xl font-bold">
             Cadastrar
           </button>
         </div>
@@ -434,71 +349,39 @@ export default function GestaoUsuarios() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-left">
-              <th className="py-3 px-3">
-                E-mail
-              </th>
-
-              <th className="py-3 px-3">
-                Perfil
-              </th>
-
-              <th className="py-3 px-3">
-                Estados permitidos
-              </th>
-
-              <th className="py-3 px-3">
-                Segmentos permitidos
-              </th>
+              <th className="py-3 px-3">E-mail</th>
+              <th className="py-3 px-3">Perfil</th>
+              <th className="py-3 px-3">Estados permitidos</th>
+              <th className="py-3 px-3">Segmentos permitidos</th>
             </tr>
           </thead>
 
           <tbody>
             {loading ? (
               <tr>
-                <td
-                  colSpan={4}
-                  className="py-6 text-center"
-                >
+                <td colSpan={4} className="py-6 text-center">
                   Carregando...
                 </td>
               </tr>
             ) : usuarios.length === 0 ? (
               <tr>
-                <td
-                  colSpan={4}
-                  className="py-6 text-center text-slate-400"
-                >
+                <td colSpan={4} className="py-6 text-center text-slate-400">
                   Nenhum usuário encontrado.
                 </td>
               </tr>
             ) : (
               usuarios.map((usuario) => (
-                <tr
-                  key={usuario.id}
-                  className="border-b border-slate-100"
-                >
-                  <td className="py-4 px-3">
-                    {usuario.email}
-                  </td>
+                <tr key={usuario.id} className="border-b border-slate-100">
+                  <td className="py-4 px-3">{usuario.email}</td>
 
                   <td className="py-4 px-3">
                     <select
                       value={usuario.role || "vendedor"}
-                      onChange={(e) =>
-                        atualizarRole(
-                          usuario.id,
-                          e.target.value as PerfilUsuario
-                        )
-                      }
+                      onChange={(e) => atualizarRole(usuario.id, e.target.value as PerfilUsuario)}
                       className="border border-slate-300 rounded-xl px-3 py-2"
                     >
-                      <option value="vendedor">
-                        Vendedor
-                      </option>
-
-                      <option value="admin">
-                        Administrador
-                      </option>
+                      <option value="vendedor">Vendedor</option>
+                      <option value="admin">Administrador</option>
                     </select>
                   </td>
 
@@ -506,15 +389,8 @@ export default function GestaoUsuarios() {
                     <MultiSelect
                       titulo="Estados"
                       opcoes={ESTADOS_BR}
-                      selecionados={
-                        usuario.estados_permitidos || []
-                      }
-                      onSalvar={(valores) =>
-                        atualizarEstados(
-                          usuario.id,
-                          valores
-                        )
-                      }
+                      selecionados={usuario.estados_permitidos || []}
+                      onSalvar={(valores) => atualizarEstados(usuario.id, valores)}
                     />
                   </td>
 
@@ -522,15 +398,8 @@ export default function GestaoUsuarios() {
                     <MultiSelect
                       titulo="Segmentos"
                       opcoes={SEGMENTOS}
-                      selecionados={
-                        usuario.segmentos_permitidos || []
-                      }
-                      onSalvar={(valores) =>
-                        atualizarSegmentos(
-                          usuario.id,
-                          valores
-                        )
-                      }
+                      selecionados={usuario.segmentos_permitidos || []}
+                      onSalvar={(valores) => atualizarSegmentos(usuario.id, valores)}
                     />
                   </td>
                 </tr>
