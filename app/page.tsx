@@ -198,17 +198,25 @@ function CRMContent() {
   ]);
 
   if (verificandoLogin) {
-    return (
-      <main className="min-h-screen bg-slate-100 flex flex-col items-center justify-center gap-4">
-        <div className="animate-spin text-3xl">⏳</div>
-        <p className="text-slate-500 font-medium">
-          Iniciando sistema...
-        </p>
-      </main>
-    );
-  }
+  return (
+    <main className="min-h-screen bg-slate-100 flex flex-col items-center justify-center gap-4">
+      <div className="animate-spin text-3xl">⏳</div>
 
-  if (!profile) {
+      <p className="text-slate-500 font-medium">
+        Iniciando sistema...
+      </p>
+
+      <button
+        onClick={() => router.replace("/login")}
+        className="mt-4 px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold"
+      >
+        Ir para login
+      </button>
+    </main>
+  );
+}
+
+if (!profile) {
   router.replace("/login");
   return null;
 }
