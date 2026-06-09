@@ -579,16 +579,7 @@ function CRMContent() {
                         {clienteSelecionado.razao_social || "-"}
                       </p>
                     </div>
-
-                    <div>
-                      <label className="text-[10px] text-slate-400 font-bold uppercase">
-                        CNPJ
-                      </label>
-                      <p className="text-sm font-medium">
-                        {clienteSelecionado.cnpj || "-"}
-                      </p>
-                    </div>
-
+                                    
                     <div>
                       <label className="text-[10px] text-slate-400 font-bold uppercase">
                         Segmento de Mercado
