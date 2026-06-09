@@ -210,7 +210,7 @@ function CRMContent() {
         onClick={() => router.replace("/login")}
         className="mt-4 px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold"
       >
-        Ir para login
+        Login
       </button>
     </main>
   );
