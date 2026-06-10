@@ -122,15 +122,21 @@ function CRMContent() {
   };
 
   const clientesFiltrados = useMemo(() => {
-    const textoEmpresa = buscaEmpresa.trim().toLowerCase();
-    const textoCodigo = buscaCodigo.trim().toLowerCase();
+   const textoEmpresa = buscaEmpresa.trim().toLowerCase();
+const textoEmpresaNumeros = buscaEmpresa.replace(/\D/g, "");
 
-    const filtrados = (clientes || []).filter((cliente) => {
-      const passaEmpresa =
-  !textoEmpresa ||
-  cliente.empresa?.toLowerCase().includes(textoEmpresa) ||
-  cliente.razao_social?.toLowerCase().includes(textoEmpresa) ||
-  cliente.cnpj?.toLowerCase().includes(textoEmpresa);
+const textoCodigo = buscaCodigo.trim().toLowerCase();
+
+const filtrados = (clientes || []).filter((cliente) => {
+  const cnpjNumeros = cliente.cnpj?.replace(/\D/g, "") || "";
+
+  const passaEmpresa =
+    !textoEmpresa ||
+    cliente.empresa?.toLowerCase().includes(textoEmpresa) ||
+    cliente.razao_social?.toLowerCase().includes(textoEmpresa) ||
+    cliente.cnpj?.toLowerCase().includes(textoEmpresa) ||
+    (!!textoEmpresaNumeros &&
+      cnpjNumeros.includes(textoEmpresaNumeros));
 
       const passaCodigo =
         !textoCodigo ||
