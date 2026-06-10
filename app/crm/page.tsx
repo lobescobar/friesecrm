@@ -127,12 +127,10 @@ function CRMContent() {
 
     const filtrados = (clientes || []).filter((cliente) => {
       const passaEmpresa =
-        !textoEmpresa ||
-        cliente.empresa?.toLowerCase().includes(textoEmpresa) ||
-        cliente.razao_social?.toLowerCase().includes(textoEmpresa) ||
-        cliente.cnpj?.toLowerCase().includes(textoEmpresa) ||
-        cliente.cidade?.toLowerCase().includes(textoEmpresa) ||
-        cliente.estado?.toLowerCase().includes(textoEmpresa);
+  !textoEmpresa ||
+  cliente.empresa?.toLowerCase().includes(textoEmpresa) ||
+  cliente.razao_social?.toLowerCase().includes(textoEmpresa) ||
+  cliente.cnpj?.toLowerCase().includes(textoEmpresa);
 
       const passaCodigo =
         !textoCodigo ||
