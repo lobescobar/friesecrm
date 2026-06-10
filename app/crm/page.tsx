@@ -201,29 +201,9 @@ const filtrados = (clientes || []).filter((cliente) => {
     ordenacao,
   ]);
 
-  if (verificandoLogin) {
-  return (
-    <main className="min-h-screen bg-slate-100 flex flex-col items-center justify-center gap-4">
-      <div className="animate-spin text-3xl">⏳</div>
-
-      <p className="text-slate-500 font-medium">
-        Iniciando sistema...
-      </p>
-
-      <button
-        onClick={() => router.replace("/login")}
-        className="mt-4 px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold"
-      >
-        Login
-      </button>
-    </main>
-  );
-}
-
-if (!profile) {
+  if (!profile) {
   router.replace("/login");
   return null;
-}
 
   const handleAdicionarContato = async () => {
     if (!clienteSelecionado || !novoContato.nome) return;
