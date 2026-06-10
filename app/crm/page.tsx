@@ -202,8 +202,9 @@ const filtrados = (clientes || []).filter((cliente) => {
   ]);
 
   if (!profile) {
-  router.replace("/login");
-  return null;
+    router.replace("/login");
+    return null;
+  }
 
   const handleAdicionarContato = async () => {
     if (!clienteSelecionado || !novoContato.nome) return;
@@ -486,8 +487,8 @@ const filtrados = (clientes || []).filter((cliente) => {
         </div>
       </div>
 
-      {clienteSelecionado && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+    {clienteSelecionado ? (
+  <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             onClick={() => setClienteSelecionado(null)}
@@ -732,7 +733,7 @@ const filtrados = (clientes || []).filter((cliente) => {
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </main>
   );
 }
