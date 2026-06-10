@@ -3,18 +3,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { supabase } from "../lib/supabase";
-import ImportarERP from "./components/ImportarERP";
-import GestaoUsuarios from "./components/GestaoUsuarios";
-import ErrorBoundary from "./components/ErrorBoundary";
-import { useClientes } from "../hooks/useClientes";
-import { useContatos } from "../hooks/useContatos";
-import { useAuth } from "../hooks/useAuth";
-import { STATUS_COLORS, StatusType } from "../utils/constants";
-import { Cliente } from "../types";
+import { supabase } from "../../lib/supabase";
+import ImportarERP from "../components/ImportarERP";
+import GestaoUsuarios from "../components/GestaoUsuarios";
+import ErrorBoundary from "../components/ErrorBoundary";
+import { useClientes } from "../../hooks/useClientes";
+import { useContatos } from "../../hooks/useContatos";
+import { useAuth } from "../../hooks/useAuth";
+import { STATUS_COLORS, StatusType } from "../../utils/constants";
+import { Cliente } from "../../types";
 
 const MapaClientes = dynamic(
-  () => import("./MapaClientes"),
+  () => import("../MapaClientes"),
   {
     ssr: false,
     loading: () => (
