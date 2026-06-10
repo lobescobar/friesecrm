@@ -5,68 +5,48 @@ import * as XLSX from "xlsx";
 import { supabase } from "../../lib/supabase";
 import { Cliente } from "../../types";
 
-type ImportarERPProps = {
-  onSucesso?: () => void;
-};
+type ImportarERPProps = { onSucesso?: () => void };
+type ClienteImportacao = Partial<Cliente> & { codigo_cliente?: string; cnpj?: string };
 
-function texto(valor: any) {
-  return String(valor ?? "").trim();
-}
+const texto = (v: any) => String(v ?? "").trim();
+const normalizar = (v: string) =>
+  v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+const somenteNumeros = (v: string) => v.replace(/\D/g, "");
 
-function normalizar(valor: string) {
-  return valor
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
-function somenteNumeros(valor: string) {
-  return valor.replace(/\D/g, "");
-}
-
-function encontrarIndiceCabecalho(headers: any[], nomesPossiveis: string[]) {
-  const headersNormalizados = headers.map((h) => normalizar(String(h ?? "")));
-  const nomesNormalizados = nomesPossiveis.map((n) => normalizar(n));
-
-  return headersNormalizados.findIndex((header) =>
-    nomesNormalizados.some((nome) => header === nome || header.includes(nome))
+function acharIndice(headers: any[], nomes: string[]) {
+  const h = headers.map((x) => normalizar(String(x ?? "")));
+  const n = nomes.map(normalizar);
+  return h.findIndex((header) =>
+    n.some((nome) => header === nome || header.includes(nome))
   );
 }
 
-function valorPorCabecalho(
-  linha: any[],
-  headers: any[],
-  nomesPossiveis: string[]
-) {
-  const indice = encontrarIndiceCabecalho(headers, nomesPossiveis);
+function porCabecalho(linha: any[], headers: any[], nomes: string[]) {
+  const i = acharIndice(headers, nomes);
+  return i >= 0 ? texto(linha[i]) : "";
+}
 
-  if (indice < 0) return "";
-
-  return texto(linha[indice]);
+function lotes<T>(lista: T[], tamanho: number) {
+  const r: T[][] = [];
+  for (let i = 0; i < lista.length; i += tamanho) r.push(lista.slice(i, i + tamanho));
+  return r;
 }
 
 export default function ImportarERP({ onSucesso }: ImportarERPProps) {
   const [carregando, setCarregando] = useState(false);
+  const [progresso, setProgresso] = useState("");
 
   async function importarERP(e: React.ChangeEvent<HTMLInputElement>) {
     const arquivo = e.target.files?.[0];
-
     if (!arquivo) return;
 
     setCarregando(true);
+    setProgresso("Lendo planilha...");
 
     try {
       const dados = await arquivo.arrayBuffer();
-
-      const workbook = XLSX.read(dados, {
-        type: "array",
-        cellDates: false,
-      });
-
-      const nomeAba = workbook.SheetNames[0];
-      const aba = workbook.Sheets[nomeAba];
-
+      const workbook = XLSX.read(dados, { type: "array", cellDates: false });
+      const aba = workbook.Sheets[workbook.SheetNames[0]];
       const rows: any[][] = XLSX.utils.sheet_to_json(aba, {
         header: 1,
         defval: "",
@@ -79,120 +59,65 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
       }
 
       let headerIndex = -1;
-
       for (let i = 0; i < rows.length; i++) {
-        const linhaNormalizada = rows[i].map((celula) =>
-          normalizar(String(celula ?? ""))
-        );
-
-        const temCodigo = linhaNormalizada.some(
-          (valor) => valor === "codigo" || valor === "cod" || valor.includes("codigo")
-        );
-
-        const temRazaoOuFantasia = linhaNormalizada.some(
-          (valor) =>
-            valor.includes("razao") ||
-            valor.includes("nome") ||
-            valor.includes("fantasia")
-        );
-
-        if (temCodigo && temRazaoOuFantasia) {
+        const linha = rows[i].map((c) => normalizar(String(c ?? "")));
+        const temCodigo = linha.some((v) => v === "codigo" || v === "cod" || v.includes("codigo"));
+        const temNome = linha.some((v) => v.includes("razao") || v.includes("nome") || v.includes("fantasia"));
+        if (temCodigo && temNome) {
           headerIndex = i;
           break;
         }
       }
 
       if (headerIndex === -1) {
-        alert(
-          'Não foi possível encontrar o cabeçalho da planilha. Verifique se existe a coluna "Codigo".'
-        );
+        alert('Não foi possível encontrar o cabeçalho da planilha. Verifique se existe a coluna "Codigo".');
         return;
       }
 
       const headers = rows[headerIndex];
       const linhasDados = rows.slice(headerIndex + 1);
 
+      setProgresso("Convertendo dados...");
+
       const clientesParaImportar = linhasDados
-        .map((linha): Partial<Cliente> | null => {
-          // Colunas fixas da planilha ERP:
-          // D = Razão Social
-          // E = Nome Fantasia
-          // AF = CNPJ
-          const razaoSocialColunaD = texto(linha[3]);
-          const nomeFantasiaColunaE = texto(linha[4]);
-          const cnpjColunaAF = texto(linha[31]);
+        .map((linha): ClienteImportacao | null => {
+          // Colunas fixas do ERP:
+          // D = Razão Social | E = Nome Fantasia | AF = CNPJ
+          const razaoSocialD = texto(linha[3]);
+          const nomeFantasiaE = texto(linha[4]);
+          const cnpjAF = texto(linha[31]);
 
-          const codigo =
-            valorPorCabecalho(linha, headers, ["Codigo", "Código", "Cod"]) ||
-            texto(linha[0]);
+          const codigo = porCabecalho(linha, headers, ["Codigo", "Código", "Cod"]) || texto(linha[0]);
+          const loja = porCabecalho(linha, headers, ["Loja"]) || texto(linha[1]);
 
-          const loja =
-            valorPorCabecalho(linha, headers, ["Loja"]) ||
-            texto(linha[1]);
+          const razao_social =
+            razaoSocialD ||
+            porCabecalho(linha, headers, ["Razao Social", "Razão Social", "Nome", "Cliente"]);
 
-          const razaoSocial =
-            razaoSocialColunaD ||
-            valorPorCabecalho(linha, headers, [
-              "Razao Social",
-              "Razão Social",
-              "Nome",
-              "Cliente",
-            ]);
+          const nome_fantasia =
+            nomeFantasiaE ||
+            porCabecalho(linha, headers, ["Nome Fantasia", "N Fantasia", "Fantasia"]);
 
-          const nomeFantasia =
-            nomeFantasiaColunaE ||
-            valorPorCabecalho(linha, headers, [
-              "Nome Fantasia",
-              "N Fantasia",
-              "Fantasia",
-            ]);
+          const cnpj = cnpjAF || porCabecalho(linha, headers, ["CNPJ", "CNPJ/CPF", "CNPJ CPF"]);
+          const empresa = nome_fantasia || razao_social;
 
-          const cnpj =
-            cnpjColunaAF ||
-            valorPorCabecalho(linha, headers, [
-              "CNPJ",
-              "CNPJ/CPF",
-              "CNPJ CPF",
-            ]);
+          if (!empresa && !razao_social && !cnpj) return null;
 
-          const segmento = valorPorCabecalho(linha, headers, [
-            "Tp. Mercado",
-            "Tipo Mercado",
-            "Segmento",
-            "Mercado",
-          ]);
+          const segmento = porCabecalho(linha, headers, ["Tp. Mercado", "Tipo Mercado", "Segmento", "Mercado"]);
+          const cidade = porCabecalho(linha, headers, ["Municipio", "Município", "Cidade"]);
+          const estado = porCabecalho(linha, headers, ["Estado", "UF"]).toUpperCase();
+          const endereco = porCabecalho(linha, headers, ["Endereco", "Endereço", "Logradouro"]);
 
-          const cidade = valorPorCabecalho(linha, headers, [
-            "Municipio",
-            "Município",
-            "Cidade",
-          ]);
-
-          const estado = valorPorCabecalho(linha, headers, [
-            "Estado",
-            "UF",
-          ]).toUpperCase();
-
-          const endereco = valorPorCabecalho(linha, headers, [
-            "Endereco",
-            "Endereço",
-            "Logradouro",
-          ]);
-
-          const empresa = nomeFantasia || razaoSocial;
-
-          if (!empresa && !razaoSocial && !cnpj) return null;
-
-          const codigoCliente =
+          const codigo_cliente =
             codigo || loja
               ? `${String(codigo).trim()}-${String(loja || "0").padStart(2, "0")}`
               : "";
 
           return {
-            codigo_cliente: codigoCliente,
+            codigo_cliente,
             empresa,
-            nome_fantasia: nomeFantasia,
-            razao_social: razaoSocial,
+            nome_fantasia,
+            razao_social,
             cnpj,
             segmento: segmento ? segmento.toUpperCase() : "",
             cidade,
@@ -201,86 +126,93 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
             status: "Novo",
           };
         })
-        .filter((cliente): cliente is Partial<Cliente> => {
+        .filter((cliente): cliente is ClienteImportacao => {
           if (!cliente) return false;
-
           const nome = texto(cliente.empresa);
           const razao = texto(cliente.razao_social);
           const cnpj = texto(cliente.cnpj);
-
           if (!nome && !razao && !cnpj) return false;
           if (normalizar(nome).includes("nome fantasia")) return false;
           if (normalizar(razao).includes("razao social")) return false;
-
           return true;
         });
 
-      if (clientesParaImportar.length === 0) {
+      if (!clientesParaImportar.length) {
         alert("Nenhum dado válido encontrado para importação.");
         return;
       }
+
+      setProgresso("Buscando clientes existentes...");
+
+      const { data: existentes, error: erroExistentes } = await supabase
+        .from("clientes")
+        .select("id, codigo_cliente, cnpj");
+
+      if (erroExistentes) {
+        console.error(erroExistentes);
+        alert("Erro ao consultar clientes existentes.");
+        return;
+      }
+
+      const porCodigo = new Map<string, string>();
+      const porCnpj = new Map<string, string>();
+
+      (existentes || []).forEach((c: any) => {
+        const codigo = texto(c.codigo_cliente);
+        const cnpj = somenteNumeros(texto(c.cnpj));
+        if (codigo) porCodigo.set(codigo, c.id);
+        if (cnpj) porCnpj.set(cnpj, c.id);
+      });
+
+      const paraInserir: ClienteImportacao[] = [];
+      const paraAtualizar: Array<{ id: string; dados: ClienteImportacao }> = [];
+
+      clientesParaImportar.forEach((cliente) => {
+        const codigo = texto(cliente.codigo_cliente);
+        const cnpj = somenteNumeros(texto(cliente.cnpj));
+        const id = (codigo && porCodigo.get(codigo)) || (cnpj && porCnpj.get(cnpj)) || "";
+
+        if (id) paraAtualizar.push({ id, dados: cliente });
+        else paraInserir.push(cliente);
+      });
 
       let inseridos = 0;
       let atualizados = 0;
       let ignorados = 0;
 
-      for (const cliente of clientesParaImportar) {
-        const codigoCliente = texto(cliente.codigo_cliente);
-        const cnpjNumeros = somenteNumeros(texto(cliente.cnpj));
-
-        let clienteExistenteId: string | null = null;
-
-        if (codigoCliente) {
-          const { data } = await supabase
-            .from("clientes")
-            .select("id")
-            .eq("codigo_cliente", codigoCliente)
-            .maybeSingle();
-
-          if (data?.id) {
-            clienteExistenteId = data.id;
-          }
+      const lotesInsercao = lotes(paraInserir, 300);
+      for (let i = 0; i < lotesInsercao.length; i++) {
+        setProgresso(`Inserindo lote ${i + 1}/${lotesInsercao.length}...`);
+        const { error } = await supabase.from("clientes").insert(lotesInsercao[i]);
+        if (error) {
+          console.warn("Erro ao inserir lote:", error.message);
+          ignorados += lotesInsercao[i].length;
+        } else {
+          inseridos += lotesInsercao[i].length;
         }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
 
-        if (!clienteExistenteId && cnpjNumeros) {
-          const { data } = await supabase
-            .from("clientes")
-            .select("id, cnpj")
-            .not("cnpj", "is", null);
+      const lotesAtualizacao = lotes(paraAtualizar, 50);
+      for (let i = 0; i < lotesAtualizacao.length; i++) {
+        setProgresso(`Atualizando lote ${i + 1}/${lotesAtualizacao.length}...`);
 
-          const encontrado = (data || []).find(
-            (item: any) => somenteNumeros(String(item.cnpj || "")) === cnpjNumeros
-          );
+        const resultado = await Promise.all(
+          lotesAtualizacao[i].map((item) =>
+            supabase.from("clientes").update(item.dados).eq("id", item.id)
+          )
+        );
 
-          if (encontrado?.id) {
-            clienteExistenteId = encontrado.id;
-          }
-        }
-
-        if (clienteExistenteId) {
-          const { error } = await supabase
-            .from("clientes")
-            .update(cliente)
-            .eq("id", clienteExistenteId);
-
-          if (error) {
-            console.warn("Erro ao atualizar cliente:", error.message);
+        resultado.forEach((res) => {
+          if (res.error) {
+            console.warn("Erro ao atualizar cliente:", res.error.message);
             ignorados++;
           } else {
             atualizados++;
           }
-        } else {
-          const { error } = await supabase
-            .from("clientes")
-            .insert(cliente);
+        });
 
-          if (error) {
-            console.warn("Erro ao inserir cliente:", error.message);
-            ignorados++;
-          } else {
-            inseridos++;
-          }
-        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
       }
 
       alert(
@@ -293,15 +225,13 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
       alert("Erro ao processar o arquivo .xlsx. Verifique o formato do arquivo.");
     } finally {
       setCarregando(false);
-
-      if (e.target) {
-        e.target.value = "";
-      }
+      setProgresso("");
+      if (e.target) e.target.value = "";
     }
   }
 
   return (
-    <div>
+    <div className="flex flex-col items-end gap-1">
       <input
         id="importarERP"
         type="file"
@@ -316,9 +246,7 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
         onClick={() => document.getElementById("importarERP")?.click()}
         disabled={carregando}
         className={`${
-          carregando
-            ? "bg-slate-400"
-            : "bg-slate-900 hover:bg-slate-800"
+          carregando ? "bg-slate-400" : "bg-slate-900 hover:bg-slate-800"
         } text-white px-4 py-2 rounded-xl text-sm font-medium transition flex items-center gap-2`}
       >
         {carregando ? (
@@ -333,6 +261,12 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
           </>
         )}
       </button>
+
+      {progresso && (
+        <span className="text-[10px] text-slate-500 max-w-[240px] text-right">
+          {progresso}
+        </span>
+      )}
     </div>
   );
 }
