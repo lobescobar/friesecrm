@@ -79,13 +79,7 @@ function CRMContent() {
     }
   }, [clienteSelecionado, carregarContatos]);
 
-  useEffect(() => {
-    if (!verificandoLogin && !profile) {
-      router.push("/login");
-    }
-  }, [verificandoLogin, profile, router]);
-
-  const segmentosUnicos = useMemo(() => {
+    const segmentosUnicos = useMemo(() => {
     return Array.from(
       new Set(
         (clientes || [])
@@ -201,10 +195,17 @@ const filtrados = (clientes || []).filter((cliente) => {
     ordenacao,
   ]);
 
-  if (!profile) {
-    router.replace("/login");
-    return null;
-  }
+  if (verificandoLogin) {
+  return null;
+}
+
+if (verificandoLogin) {
+  return null;
+}
+
+if (!profile) {
+  return null;
+}
 
   const handleAdicionarContato = async () => {
     if (!clienteSelecionado || !novoContato.nome) return;
