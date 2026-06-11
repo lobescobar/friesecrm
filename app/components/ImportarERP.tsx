@@ -180,7 +180,7 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
       let atualizados = 0;
       let ignorados = 0;
 
-      const lotesInsercao = lotes(paraInserir, 300);
+      const lotesInsercao = lotes(paraInserir, 100);
       for (let i = 0; i < lotesInsercao.length; i++) {
         setProgresso(`Inserindo lote ${i + 1}/${lotesInsercao.length}...`);
         const { error } = await supabase.from("clientes").insert(lotesInsercao[i]);
@@ -193,24 +193,35 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
         await new Promise((resolve) => setTimeout(resolve, 50));
       }
 
-      const lotesAtualizacao = lotes(paraAtualizar, 50);
-      for (let i = 0; i < lotesAtualizacao.length; i++) {
-        setProgresso(`Atualizando lote ${i + 1}/${lotesAtualizacao.length}...`);
+      const lotesAtualizacao = lotes(paraAtualizar, 10);
 
-        const resultado = await Promise.all(
-          lotesAtualizacao[i].map((item) =>
-            supabase.from("clientes").update(item.dados).eq("id", item.id)
-          )
-        );
+for (let i = 0; i < lotesAtualizacao.length; i++) {
+  setProgresso(
+    `Atualizando lote ${i + 1}/${lotesAtualizacao.length}...`
+  );
 
-        resultado.forEach((res) => {
-          if (res.error) {
-            console.warn("Erro ao atualizar cliente:", res.error.message);
-            ignorados++;
-          } else {
-            atualizados++;
-          }
-        });
+  for (const item of lotesAtualizacao[i]) {
+    const { error } = await supabase
+      .from("clientes")
+      .update(item.dados)
+      .eq("id", item.id);
+
+    if (error) {
+      console.warn(
+        "Erro ao atualizar cliente:",
+        error.message
+      );
+
+      ignorados++;
+    } else {
+      atualizados++;
+    }
+  }
+
+  await new Promise((resolve) =>
+    setTimeout(resolve, 100)
+  );
+}
 
         await new Promise((resolve) => setTimeout(resolve, 50));
       }
