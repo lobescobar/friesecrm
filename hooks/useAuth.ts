@@ -8,71 +8,45 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   const carregarPerfil = useCallback(async (userId: string, email: string) => {
+    // Tenta buscar o perfil
+    let { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
 
-    try {
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Erro ao buscar profile:', error);
-      }
-
-      // Se não existir perfil no banco
-      if (!data) {
-
-        const perfilTemporario = {
-          id: userId,
-          email,
-          role: 'admin',
-          segmentos_permitidos: [],
-          estados_permitidos: []
-        };
-
-        setProfile(perfilTemporario as Profile);
-        setLoading(false);
-        return;
-      }
-
-      setProfile(data as Profile);
-
-    } catch (err) {
-
-      console.error('Erro geral:', err);
-
-      const perfilTemporario = {
+    // Se não existir (erro PGRST116 é "no rows found"), cria um perfil na hora
+    if (error && (error.code === 'PGRST116' || error.message.includes('no rows'))) {
+      const novoPerfil = {
         id: userId,
-        email,
-        role: 'admin',
+        email: email,
+        role: 'vendedor',
         segmentos_permitidos: [],
         estados_permitidos: []
       };
-
-      setProfile(perfilTemporario as Profile);
+      
+      const { data: createdData, error: createError } = await supabase
+        .from('profiles')
+        .insert([novoPerfil])
+        .select()
+        .single();
+        
+      if (!createError) {
+        setProfile(createdData as Profile);
+      }
+    } else if (!error && data) {
+      setProfile(data as Profile);
     }
-
+    
     setLoading(false);
-
   }, []);
 
   useEffect(() => {
-
     const verificarSessao = async () => {
-
       const { data: { session } } = await supabase.auth.getSession();
-
       if (session) {
-
         setUser(session.user);
-
-        await carregarPerfil(
-          session.user.id,
-          session.user.email || ''
-        );
-
+        await carregarPerfil(session.user.id, session.user.email || '');
       } else {
         setLoading(false);
       }
@@ -80,21 +54,11 @@ export function useAuth() {
 
     verificarSessao();
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_, session) => {
-
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session) {
-
         setUser(session.user);
-
-        await carregarPerfil(
-          session.user.id,
-          session.user.email || ''
-        );
-
+        await carregarPerfil(session.user.id, session.user.email || '');
       } else {
-
         setUser(null);
         setProfile(null);
         setLoading(false);
@@ -102,15 +66,9 @@ export function useAuth() {
     });
 
     return () => subscription.unsubscribe();
-
   }, [carregarPerfil]);
 
   const isAdmin = !!profile && profile.role === 'admin';
 
-  return {
-    user,
-    profile,
-    loading,
-    isAdmin
-  };
+  return { user, profile, loading, isAdmin };
 }

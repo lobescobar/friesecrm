@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import {
   MapContainer,
   TileLayer,
@@ -82,10 +82,12 @@ function BuscaMapa() {
 }
 
 export default function MapaClientes({ clientes }: { clientes: Cliente[] }) {
-  // Filtra apenas clientes que possuem coordenadas válidas
-  const clientesComCoordenadas = clientes.filter(
-    (c) => c.latitude && c.longitude && !isNaN(parseFloat(c.latitude)) && !isNaN(parseFloat(c.longitude))
-  )
+  // Memoiza os clientes com coordenadas para evitar filtragem em toda renderização
+  const clientesComCoordenadas = useMemo(() => {
+    return clientes.filter(
+      (c) => c.latitude && c.longitude && !isNaN(parseFloat(c.latitude)) && !isNaN(parseFloat(c.longitude))
+    )
+  }, [clientes])
 
   return (
     <MapContainer
@@ -105,7 +107,7 @@ export default function MapaClientes({ clientes }: { clientes: Cliente[] }) {
         <Marker
           key={cliente.id}
           position={[parseFloat(cliente.latitude!), parseFloat(cliente.longitude!)]}
-          icon={icones[cliente.status as StatusType] ?? icones.Novo}
+          icon={icones[cliente.status as StatusType] || icones.Novo}
         >
           <Popup>
             <div className="text-sm">

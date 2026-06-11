@@ -30,7 +30,7 @@ export default function Login() {
       setCarregando(false)
     } else {
       // Login com sucesso, redireciona para o mapa/CRM
-      router.push("/crm")
+      router.push('/')
     }
   }
 

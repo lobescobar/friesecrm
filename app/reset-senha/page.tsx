@@ -33,7 +33,7 @@ export default function ResetSenha() {
     } else {
       setMensagem('Senha atualizada com sucesso! Redirecionando...')
       setTimeout(() => {
-        router.push("/crm") // Joga pro CRM depois de 2 segundos
+        router.push('/') // Joga pro CRM depois de 2 segundos
       }, 2000)
     }
     

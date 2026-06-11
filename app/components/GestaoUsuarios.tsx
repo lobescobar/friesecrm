@@ -1,413 +1,140 @@
-"use client";
+'use client'
 
-import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase";
-import { Profile } from "../../types";
+import { useState, useEffect } from 'react'
+import { supabase } from '../../lib/supabase'
+import { Profile } from '../../types'
 
-const ESTADOS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
-
-const SEGMENTOS = [
-  "AGROINDUSTRIA",
-  "CORRUGADOS",
-  "TEMPERA INDUTIVA",
-  "TRATAMENTO TERMICO"
-];
-
-type PerfilUsuario = "admin" | "vendedor";
-
-type MultiSelectProps = {
-  titulo: string;
-  opcoes: string[];
-  selecionados: string[];
-  onSalvar: (valores: string[]) => Promise<boolean>;
-};
-
-function MultiSelect({ titulo, opcoes, selecionados, onSalvar }: MultiSelectProps) {
-  const [aberto, setAberto] = useState(false);
-  const [busca, setBusca] = useState("");
-  const [valores, setValores] = useState<string[]>([]);
-  const [salvando, setSalvando] = useState(false);
+export default function GestaoUsuarios() {
+  const [usuarios, setUsuarios] = useState<Profile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editando, setEditando] = useState<Profile | null>(null)
 
   useEffect(() => {
-    setValores(selecionados || []);
-  }, [selecionados]);
+    carregarUsuarios()
+  }, [])
 
-  const opcoesFiltradas = opcoes.filter((item) =>
-    item.toLowerCase().includes(busca.toLowerCase())
-  );
+  async function carregarUsuarios() {
+    const { data, error } = await supabase.from('profiles').select('*')
+    if (!error) setUsuarios(data)
+    setLoading(false)
+  }
 
-  const todosSelecionados = opcoes.length > 0 && opcoes.every((item) => valores.includes(item));
+  async function salvarAlteracoes() {
+    if (!editando) return
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        role: editando.role,
+        segmentos_permitidos: editando.segmentos_permitidos,
+        estados_permitidos: editando.estados_permitidos
+      })
+      .eq('id', editando.id)
 
-  const toggleValor = (valor: string) => {
-    setValores((atual) =>
-      atual.includes(valor) ? atual.filter((v) => v !== valor) : [...atual, valor]
-    );
-  };
-
-  const toggleTodos = () => {
-    setValores(todosSelecionados ? [] : [...opcoes]);
-  };
-
-  const cancelar = () => {
-    setValores(selecionados || []);
-    setBusca("");
-    setAberto(false);
-    setSalvando(false);
-  };
-
-  const salvar = async () => {
-    if (salvando) return;
-    setSalvando(true);
-
-    try {
-      const sucesso = await onSalvar(valores);
-
-      if (sucesso) {
-        setAberto(false);
-        setBusca("");
-      }
-    } catch (error) {
-      console.error(error);
-      alert("Erro ao salvar seleção.");
-    } finally {
-      setSalvando(false);
+    if (!error) {
+      alert('Usuário atualizado com sucesso!')
+      setEditando(null)
+      carregarUsuarios()
+    } else {
+      alert('Erro ao atualizar: ' + error.message)
     }
-  };
+  }
+
+  if (loading) return <div className="p-4">Carregando usuários...</div>
 
   return (
-    <div className="relative min-w-[240px]">
-      <button
-        type="button"
-        onClick={() => setAberto(!aberto)}
-        className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white text-left flex justify-between items-center hover:bg-slate-50"
-      >
-        <span>{selecionados?.length || 0} selecionado(s)</span>
-        <span>▼</span>
-      </button>
-
-      {aberto && (
-        <div className="absolute z-50 mt-2 w-72 bg-white border border-slate-300 rounded-2xl shadow-xl p-3">
-          <div className="font-bold text-sm mb-2">{titulo}</div>
-
-          <input
-            type="text"
-            placeholder="Pesquisar"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            className="w-full border border-slate-300 rounded-xl px-3 py-2 mb-3"
-          />
-
-          <div className="max-h-56 overflow-y-auto border border-slate-100 rounded-xl p-2">
-            <label className="flex items-center gap-2 mb-2 cursor-pointer">
-              <input type="checkbox" checked={todosSelecionados} onChange={toggleTodos} />
-              Selecionar tudo
-            </label>
-
-            {opcoesFiltradas.map((item) => (
-              <label key={item} className="flex items-center gap-2 py-1 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={valores.includes(item)}
-                  onChange={() => toggleValor(item)}
-                />
-                {item}
-              </label>
+    <div className="bg-white border rounded-2xl shadow-sm overflow-hidden mt-4">
+      <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+        <h2 className="text-lg font-bold">Gestão de Usuários e Alçadas</h2>
+      </div>
+      
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th className="text-left px-6 py-3 font-semibold">E-mail</th>
+              <th className="text-left px-6 py-3 font-semibold">Cargo</th>
+              <th className="text-left px-6 py-3 font-semibold">Alçadas (Segmentos/Estados)</th>
+              <th className="text-right px-6 py-3 font-semibold">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {usuarios.map(u => (
+              <tr key={u.id} className="border-b border-slate-100 hover:bg-slate-50">
+                <td className="px-6 py-4">{u.email}</td>
+                <td className="px-6 py-4">
+                  <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                    {u.role}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-xs text-slate-500">
+                  {u.role === 'admin' ? 'Acesso Total' : (
+                    <div>
+                      <p><strong>Seg:</strong> {u.segmentos_permitidos?.join(', ') || 'Todos'}</p>
+                      <p><strong>Est:</strong> {u.estados_permitidos?.join(', ') || 'Todos'}</p>
+                    </div>
+                  )}
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <button onClick={() => setEditando(u)} className="text-blue-600 font-bold hover:underline">Editar</button>
+                </td>
+              </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
 
-            {opcoesFiltradas.length === 0 && (
-              <div className="text-sm text-slate-400 py-3">
-                Nenhuma opção encontrada.
+      {editando && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setEditando(null)} />
+          <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl p-8">
+            <h3 className="text-xl font-bold mb-6">Editar Alçada: {editando.email}</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Cargo</label>
+                <select 
+                  value={editando.role} 
+                  onChange={e => setEditando({...editando, role: e.target.value as any})}
+                  className="w-full border border-slate-200 rounded-xl px-4 py-2 text-sm"
+                >
+                  <option value="vendedor">Vendedor</option>
+                  <option value="admin">Administrador</option>
+                </select>
               </div>
-            )}
-          </div>
 
-          <div className="flex justify-end gap-2 mt-3">
-            <button
-              type="button"
-              onClick={cancelar}
-              disabled={salvando}
-              className="px-4 py-2 border border-slate-300 rounded-xl disabled:opacity-60"
-            >
-              Cancelar
-            </button>
+              {editando.role === 'vendedor' && (
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Segmentos Permitidos (separados por vírgula)</label>
+                    <input 
+                      type="text" 
+                      value={editando.segmentos_permitidos?.join(', ')} 
+                      onChange={e => setEditando({...editando, segmentos_permitidos: e.target.value.split(',').map(s => s.trim()).filter(s => s !== '')})}
+                      placeholder="Ex: Alimentos, Bebidas"
+                      className="w-full border border-slate-200 rounded-xl px-4 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Estados Permitidos (separados por vírgula)</label>
+                    <input 
+                      type="text" 
+                      value={editando.estados_permitidos?.join(', ')} 
+                      onChange={e => setEditando({...editando, estados_permitidos: e.target.value.split(',').map(s => s.trim()).filter(s => s !== '')})}
+                      placeholder="Ex: RS, SC, PR"
+                      className="w-full border border-slate-200 rounded-xl px-4 py-2 text-sm"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
 
-            <button
-              type="button"
-              onClick={salvar}
-              disabled={salvando}
-              className="px-4 py-2 bg-slate-900 text-white rounded-xl disabled:opacity-60"
-            >
-              {salvando ? "Salvando..." : "OK"}
-            </button>
+            <div className="mt-8 flex gap-3">
+              <button onClick={salvarAlteracoes} className="flex-1 bg-slate-900 text-white py-3 rounded-2xl font-bold hover:bg-slate-800 transition">Salvar</button>
+              <button onClick={() => setEditando(null)} className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-2xl font-bold hover:bg-slate-200 transition">Cancelar</button>
+            </div>
           </div>
         </div>
       )}
     </div>
-  );
-}
-
-export default function GestaoUsuarios() {
-  const [usuarios, setUsuarios] = useState<Profile[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const [novoEmail, setNovoEmail] = useState("");
-  const [novaSenha, setNovaSenha] = useState("");
-  const [novoRole, setNovoRole] = useState<PerfilUsuario>("vendedor");
-
-  const carregarUsuarios = async () => {
-    setLoading(true);
-
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("email", { ascending: true });
-
-      if (error) {
-        console.warn("Erro ao carregar usuários:", error?.message || error);
-        alert("Erro ao carregar usuários.");
-        return;
-      }
-
-      setUsuarios((data || []) as Profile[]);
-    } catch (error: any) {
-      console.error(error);
-      alert(error.message || "Erro inesperado ao carregar usuários.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    carregarUsuarios();
-  }, []);
-
-  const atualizarUsuarioLocal = (
-    id: string,
-    campo: "estados_permitidos" | "segmentos_permitidos",
-    valores: string[]
-  ) => {
-    setUsuarios((atual) =>
-      atual.map((usuario) =>
-        usuario.id === id ? { ...usuario, [campo]: valores } : usuario
-      )
-    );
-  };
-
-  const atualizarEstados = async (id: string, estados: string[]): Promise<boolean> => {
-    atualizarUsuarioLocal(id, "estados_permitidos", estados);
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ estados_permitidos: estados })
-      .eq("id", id);
-
-    if (error) {
-      console.warn("Erro ao atualizar estados:", error?.message || error);
-      alert("Erro ao atualizar estados.");
-      await carregarUsuarios();
-      return false;
-    }
-
-    return true;
-  };
-
-  const atualizarSegmentos = async (id: string, segmentos: string[]): Promise<boolean> => {
-    atualizarUsuarioLocal(id, "segmentos_permitidos", segmentos);
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ segmentos_permitidos: segmentos })
-      .eq("id", id);
-
-    if (error) {
-      console.warn("Erro ao atualizar segmentos:", error?.message || error);
-      alert("Erro ao atualizar segmentos.");
-      await carregarUsuarios();
-      return false;
-    }
-
-    return true;
-  };
-
-  const atualizarRole = async (id: string, role: PerfilUsuario) => {
-    const { error } = await supabase
-      .from("profiles")
-      .update({ role })
-      .eq("id", id);
-
-    if (error) {
-      console.warn("Erro ao atualizar perfil:", error?.message || error);
-      alert("Erro ao atualizar perfil.");
-      return;
-    }
-
-    await carregarUsuarios();
-  };
-
-  const cadastrarUsuario = async () => {
-    if (!novoEmail || !novaSenha) {
-      alert("Informe e-mail e senha.");
-      return;
-    }
-
-    if (novaSenha.length < 6) {
-      alert("A senha precisa ter pelo menos 6 caracteres.");
-      return;
-    }
-
-    try {
-      const response = await fetch("/api/admin/create-user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: novoEmail,
-          password: novaSenha,
-          role: novoRole,
-          estados_permitidos: [],
-          segmentos_permitidos: []
-        })
-      });
-
-      const texto = await response.text();
-
-      let result: any = {};
-
-      try {
-        result = JSON.parse(texto);
-      } catch {
-        result = { error: texto };
-      }
-
-      if (!response.ok) {
-        alert(result.error || "Erro ao criar usuário.");
-        return;
-      }
-
-      alert("Usuário criado com sucesso.");
-
-      setNovoEmail("");
-      setNovaSenha("");
-      setNovoRole("vendedor");
-
-      await carregarUsuarios();
-    } catch (error: any) {
-      console.error(error);
-      alert(error.message || "Erro interno ao cadastrar usuário.");
-    }
-  };
-
-  return (
-    <div className="bg-white rounded-3xl border border-slate-200 shadow-lg p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h2 className="text-2xl font-bold">Gestão de Usuários</h2>
-          <p className="text-sm text-slate-500">Controle de permissões</p>
-        </div>
-
-        <button onClick={carregarUsuarios} className="px-4 py-2 border border-slate-300 rounded-2xl">
-          Atualizar
-        </button>
-      </div>
-
-      <div className="bg-slate-50 rounded-3xl border border-slate-200 p-5 mb-6">
-        <h3 className="text-lg font-bold mb-4">Novo usuário</h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <input
-            type="email"
-            placeholder="E-mail"
-            value={novoEmail}
-            onChange={(e) => setNovoEmail(e.target.value)}
-            className="border border-slate-300 rounded-2xl px-4 py-3"
-          />
-
-          <input
-            type="password"
-            placeholder="Senha"
-            value={novaSenha}
-            onChange={(e) => setNovaSenha(e.target.value)}
-            className="border border-slate-300 rounded-2xl px-4 py-3"
-          />
-
-          <select
-            value={novoRole}
-            onChange={(e) => setNovoRole(e.target.value as PerfilUsuario)}
-            className="border border-slate-300 rounded-2xl px-4 py-3"
-          >
-            <option value="vendedor">Vendedor</option>
-            <option value="admin">Administrador</option>
-          </select>
-
-          <button onClick={cadastrarUsuario} className="bg-slate-900 text-white rounded-2xl font-bold">
-            Cadastrar
-          </button>
-        </div>
-      </div>
-
-      <div className="overflow-x-auto pb-72">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-200 text-left">
-              <th className="py-3 px-3">E-mail</th>
-              <th className="py-3 px-3">Perfil</th>
-              <th className="py-3 px-3">Estados permitidos</th>
-              <th className="py-3 px-3">Segmentos permitidos</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={4} className="py-6 text-center">
-                  Carregando...
-                </td>
-              </tr>
-            ) : usuarios.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="py-6 text-center text-slate-400">
-                  Nenhum usuário encontrado.
-                </td>
-              </tr>
-            ) : (
-              usuarios.map((usuario) => (
-                <tr key={usuario.id} className="border-b border-slate-100">
-                  <td className="py-4 px-3">{usuario.email}</td>
-
-                  <td className="py-4 px-3">
-                    <select
-                      value={usuario.role || "vendedor"}
-                      onChange={(e) => atualizarRole(usuario.id, e.target.value as PerfilUsuario)}
-                      className="border border-slate-300 rounded-xl px-3 py-2"
-                    >
-                      <option value="vendedor">Vendedor</option>
-                      <option value="admin">Administrador</option>
-                    </select>
-                  </td>
-
-                  <td className="py-4 px-3">
-                    <MultiSelect
-                      titulo="Estados"
-                      opcoes={ESTADOS_BR}
-                      selecionados={usuario.estados_permitidos || []}
-                      onSalvar={(valores) => atualizarEstados(usuario.id, valores)}
-                    />
-                  </td>
-
-                  <td className="py-4 px-3">
-                    <MultiSelect
-                      titulo="Segmentos"
-                      opcoes={SEGMENTOS}
-                      selecionados={usuario.segmentos_permitidos || []}
-                      onSalvar={(valores) => atualizarSegmentos(usuario.id, valores)}
-                    />
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  )
 }
