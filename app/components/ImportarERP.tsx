@@ -218,13 +218,9 @@ for (let i = 0; i < lotesAtualizacao.length; i++) {
       atualizados++;
     }
   }
-
-  await new Promise((resolve) =>
-    setTimeout(resolve, 100)
-  );
-}
-
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await new Promise((resolve) =>
+          setTimeout(resolve, 100)
+        );
       }
 
       alert(
@@ -238,10 +234,13 @@ for (let i = 0; i < lotesAtualizacao.length; i++) {
     } finally {
       setCarregando(false);
       setProgresso("");
-      if (e.target) e.target.value = "";
+
+      if (e.target) {
+        e.target.value = "";
+      }
     }
   }
-
+  
   return (
     <div className="flex flex-col items-end gap-1">
       <input
