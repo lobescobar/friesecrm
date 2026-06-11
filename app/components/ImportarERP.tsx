@@ -72,7 +72,11 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
 
       for (let i = 0; i < clientesParaInserir.length; i += TAMANHO_LOTE) {
         const lote = clientesParaInserir.slice(i, i + TAMANHO_LOTE)
-        const { error } = await supabase.from('clientes').insert(lote)
+        // Usa upsert para atualizar se o codigo_cliente já existir, baseando-se na constraint unique
+        const { error } = await supabase.from('clientes').upsert(lote, { 
+          onConflict: 'codigo_cliente',
+          ignoreDuplicates: false // Se for false, ele atualiza os dados existentes
+        })
         
         if (error) {
           console.error('Erro no lote:', error)
