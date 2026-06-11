@@ -208,10 +208,8 @@ for (let i = 0; i < lotesAtualizacao.length; i++) {
       .eq("id", item.id);
 
     if (error) {
-      console.warn(
-        "Erro ao atualizar cliente:",
-        error.message
-      );
+     console.warn("Erro ao atualizar cliente:", error);
+alert(`Erro ao atualizar cliente:\n\n${error.message}`);
 
       ignorados++;
     } else {
