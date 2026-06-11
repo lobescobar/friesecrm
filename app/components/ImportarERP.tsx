@@ -108,10 +108,13 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
           const estado = porCabecalho(linha, headers, ["Estado", "UF"]).toUpperCase();
           const endereco = porCabecalho(linha, headers, ["Endereco", "Endereço", "Logradouro"]);
 
-          const codigo_cliente =
-            codigo || loja
-              ? `${String(codigo).trim()}-${String(loja || "0").padStart(2, "0")}`
-              : "";
+          const codigoBase = somenteNumeros(String(codigo)).padStart(6, "0");
+const lojaBase = somenteNumeros(String(loja || "0")).padStart(2, "0");
+
+const codigo_cliente =
+  codigoBase && lojaBase
+    ? `${codigoBase}-${lojaBase}`
+    : "";
 
           return {
             codigo_cliente,
@@ -171,7 +174,10 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
       clientesParaImportar.forEach((cliente) => {
         const codigo = texto(cliente.codigo_cliente);
         const cnpj = somenteNumeros(texto(cliente.cnpj));
-        const id = (codigo && porCodigo.get(codigo)) || (cnpj && porCnpj.get(cnpj)) || "";
+        const id =
+  (cnpj && porCnpj.get(cnpj)) ||
+  (codigo && porCodigo.get(codigo)) ||
+  "";
 
         if (id) paraAtualizar.push({ id, dados: cliente });
         else paraInserir.push(cliente);
