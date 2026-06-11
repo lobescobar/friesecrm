@@ -145,8 +145,9 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
       setProgresso("Buscando clientes existentes...");
 
       const { data: existentes, error: erroExistentes } = await supabase
-        .from("clientes")
-        .select("id, codigo_cliente, cnpj");
+  .from("clientes")
+  .select("id, codigo_cliente, cnpj")
+  .limit(5000);
 
       if (erroExistentes) {
         console.error(erroExistentes);
@@ -180,7 +181,7 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
       let atualizados = 0;
       let ignorados = 0;
 
-      const lotesInsercao = lotes(paraInserir, 100);
+      const lotesInsercao = lotes(paraInserir, 50);
       for (let i = 0; i < lotesInsercao.length; i++) {
         setProgresso(`Inserindo lote ${i + 1}/${lotesInsercao.length}...`);
         const { error } = await supabase.from("clientes").insert(lotesInsercao[i]);
