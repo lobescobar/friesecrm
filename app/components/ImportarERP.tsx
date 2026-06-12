@@ -301,22 +301,21 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
       let ignoradosDuplicados = 0;
 
       clientesParaImportar.forEach((cliente) => {
-        const codigo = texto(cliente.codigo_cliente);
-        const cnpj = somenteNumeros(texto(cliente.cnpj));
+  const codigo = texto(cliente.codigo_cliente);
 
-        const idPorCodigo = codigo ? porCodigo.get(codigo) : "";
-        const idPorCnpj = cnpj ? porCnpj.get(cnpj) : "";
-        const id = idPorCodigo || idPorCnpj || "";
+  // A chave principal do ERP é sempre o código completo: 000000-00
+  const id = codigo ? porCodigo.get(codigo) || "" : "";
 
-        const dados: ClienteImportacao = { ...cliente };
+  const dados: ClienteImportacao = { ...cliente };
 
-        if (id) {
-          // Nunca tenta trocar o código ERP de um cliente já existente.
-          // Isso elimina o erro de chave única clientes_codigo_cliente_unique.
-          delete dados.codigo_cliente;
-          paraAtualizar.push({ id, dados });
-          return;
-        }
+  if (id) {
+    // Cliente já existe pelo código ERP.
+    // Não atualiza o codigo_cliente para evitar conflito de UNIQUE.
+    delete dados.codigo_cliente;
+
+    paraAtualizar.push({ id, dados });
+    return;
+  }
 
         if (codigo && codigosReservados.has(codigo)) {
           ignoradosDuplicados++;
@@ -371,15 +370,15 @@ const { error } = await supabase
   .eq("id", item.id);
 
           if (error) {
-  console.warn("Erro ao atualizar cliente:", error.message);
-  ignoradosComErro++;
-
-  if (!primeiraMensagemErro) {
-    primeiraMensagemErro = error.message;
-  }
-} else {
-  atualizados++;
-}
+            console.warn("Erro ao atualizar cliente:", error.message);
+            ignoradosComErro++;
+            
+            if (!primeiraMensagemErro) {
+             primeiraMensagemErro = error.message;
+            }
+          } else {
+            atualizados++;
+         }
         }
 
         await new Promise((resolve) => setTimeout(resolve, 100));
