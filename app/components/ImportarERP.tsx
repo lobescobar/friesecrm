@@ -314,7 +314,7 @@ let primeiraMensagemErro = "";
 
 const codigosUsados = new Set<string>();
 
-const clientesUnicos = clientesParaImportar.filter((cliente) => {
+const clientesParaUpsert = clientesParaImportar.filter((cliente) => {
   const codigo = texto(cliente.codigo_cliente);
 
   if (!codigo) {
@@ -331,7 +331,7 @@ const clientesUnicos = clientesParaImportar.filter((cliente) => {
   return true;
 });
 
-const lotesImportacao = lotes(clientesUnicos, 50);
+const lotesImportacao = lotes(clientesParaUpsert, 50);
 
 for (let i = 0; i < lotesImportacao.length; i++) {
   setProgresso(
