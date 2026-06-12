@@ -1,55 +1,65 @@
-'use client'
+"use client";
 
-import React, { Component, ErrorInfo, ReactNode } from 'react'
+import React, { Component, ReactNode } from "react";
 
-interface Props {
-  children?: ReactNode
-}
+type ErrorBoundaryProps = {
+  children: ReactNode;
+};
 
-interface State {
-  hasError: boolean
-  error: Error | null
-}
+type ErrorBoundaryState = {
+  hasError: boolean;
+  error?: Error;
+};
 
-class ErrorBoundary extends Component<Props, State> {
-  public state: State = {
-    hasError: false,
-    error: null
+export default class ErrorBoundary extends Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+
+    this.state = {
+      hasError: false,
+      error: undefined,
+    };
   }
 
-  public static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error }
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return {
+      hasError: true,
+      error,
+    };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught error:', error, errorInfo)
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("Erro capturado pelo ErrorBoundary:", error, errorInfo);
   }
 
-  public render() {
+  render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-          <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full border border-red-100">
-            <h2 className="text-2xl font-bold text-red-600 mb-4">Ops! Algo deu errado.</h2>
-            <p className="text-slate-600 mb-6">
-              Ocorreu um erro inesperado na interface. Tente recarregar a página.
+        <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-8 max-w-lg w-full text-center">
+            <h1 className="text-2xl font-bold text-slate-900 mb-3">
+              Ocorreu um erro
+            </h1>
+
+            <p className="text-sm text-slate-500 mb-6">
+              Algo inesperado aconteceu ao carregar esta página.
             </p>
-            <div className="bg-slate-50 p-4 rounded-xl mb-6 overflow-auto max-h-40">
-              <code className="text-xs text-red-500">{this.state.error?.message}</code>
-            </div>
+
             <button
+              type="button"
               onClick={() => window.location.reload()}
-              className="w-full bg-slate-900 text-white py-3 rounded-2xl font-bold hover:bg-slate-800 transition"
+              className="bg-slate-900 text-white px-5 py-3 rounded-xl text-sm font-semibold hover:bg-slate-800 transition"
             >
-              Recarregar Página
+              Recarregar página
             </button>
           </div>
         </div>
-      )
+      );
     }
 
-    return this.children
+    return this.props.children;
   }
 }
-
-export default ErrorBoundary
