@@ -365,12 +365,11 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
             .eq("id", item.id);
 
           if (error) {
-            console.warn("Erro ao atualizar cliente:", error.message);
-            primeiraMensagemErro ||= error.message;
-            ignoradosComErro++;
-          } else {
-            atualizados++;
-          }
+  console.warn("Erro ao atualizar cliente:", error.message);
+  ignorados++;
+} else {
+  atualizados++;
+}
         }
 
         await new Promise((resolve) => setTimeout(resolve, 100));
