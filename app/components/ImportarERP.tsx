@@ -306,95 +306,58 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
   }
 });
 
-      const paraInserir: ClienteImportacao[] = [];
-      const paraAtualizar: Array<{ id: string; dados: ClienteImportacao }> = [];
-      const codigosReservados = new Set(porCodigo.keys());
-      let ignoradosDuplicados = 0;
+     let inseridos = 0;
+let atualizados = 0;
+let ignoradosComErro = 0;
+let ignoradosDuplicados = 0;
+let primeiraMensagemErro = "";
 
-      clientesParaImportar.forEach((cliente) => {
-        const codigo = texto(cliente.codigo_cliente);
+const codigosUsados = new Set<string>();
 
-        // A chave principal do ERP é sempre o código completo: 000000-00
-        const id = codigo ? porCodigo.get(codigo) || "" : "";
+const clientesUnicos = clientesParaImportar.filter((cliente) => {
+  const codigo = texto(cliente.codigo_cliente);
 
-        const dados: ClienteImportacao = { ...cliente };
+  if (!codigo) {
+    ignoradosSemCodigo++;
+    return false;
+  }
 
-        if (id) {
-          // Cliente já existe pelo código ERP.
-          // Não atualiza o codigo_cliente para evitar conflito de UNIQUE.
-          delete dados.codigo_cliente;
+  if (codigosUsados.has(codigo)) {
+    ignoradosDuplicados++;
+    return false;
+  }
 
-          paraAtualizar.push({ id, dados });
-          return;
-        }
+  codigosUsados.add(codigo);
+  return true;
+});
 
-        if (codigo && codigosReservados.has(codigo)) {
-          ignoradosDuplicados++;
-          return;
-        }
+const lotesImportacao = lotes(clientesUnicos, 50);
 
-        if (codigo) {
-          codigosReservados.add(codigo);
-        }
+for (let i = 0; i < lotesImportacao.length; i++) {
+  setProgresso(
+    `Importando lote ${i + 1}/${lotesImportacao.length}...`
+  );
 
-        paraInserir.push(dados);
-      });
+  const { error } = await supabase
+    .from("clientes")
+    .upsert(lotesImportacao[i], {
+      onConflict: "codigo_cliente",
+      ignoreDuplicates: false,
+    });
 
-      let inseridos = 0;
-      let atualizados = 0;
-      let ignoradosComErro = 0;
-      let primeiraMensagemErro = "";
+  if (error) {
+    console.warn("Erro ao importar lote:", error.message);
+    ignoradosComErro += lotesImportacao[i].length;
 
-      const lotesInsercao = lotes(paraInserir, 50);
+    if (!primeiraMensagemErro) {
+      primeiraMensagemErro = error.message;
+    }
+  } else {
+    atualizados += lotesImportacao[i].length;
+  }
 
-      for (let i = 0; i < lotesInsercao.length; i++) {
-        setProgresso(`Inserindo lote ${i + 1}/${lotesInsercao.length}...`);
-
-        const { error } = await supabase.from("clientes").insert(lotesInsercao[i]);
-
-        if (error) {
-          console.warn("Erro ao inserir lote:", error.message);
-          primeiraMensagemErro ||= error.message;
-          ignoradosComErro += lotesInsercao[i].length;
-        } else {
-          inseridos += lotesInsercao[i].length;
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-
-      const lotesAtualizacao = lotes(paraAtualizar, 10);
-
-      for (let i = 0; i < lotesAtualizacao.length; i++) {
-        setProgresso(`Atualizando lote ${i + 1}/${lotesAtualizacao.length}...`);
-
-        for (const item of lotesAtualizacao[i]) {
-          const dadosAtualizacao = { ...item.dados };
-
-          // Nunca atualizar codigo_cliente em cliente existente,
-          // pois ele é UNIQUE no Supabase.
-          delete dadosAtualizacao.codigo_cliente;
-
-          const { error } = await supabase
-            .from("clientes")
-            .update(dadosAtualizacao)
-            .eq("id", item.id);
-
-          if (error) {
-            console.warn("Erro ao atualizar cliente:", error.message);
-            ignoradosComErro++;
-
-            if (!primeiraMensagemErro) {
-              primeiraMensagemErro = error.message;
-            }
-          } else {
-            atualizados++;
-          }
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-
+  await new Promise((resolve) => setTimeout(resolve, 100));
+}
       alert(
         `Importação concluída.\n\n` +
         `Inseridos: ${inseridos}\n` +
