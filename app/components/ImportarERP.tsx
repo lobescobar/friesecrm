@@ -245,14 +245,7 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
 
         if (!empresa && !razao_social && !cnpj) continue;
 
-        const segmento =
-  segmentoEK ||
-  porCabecalho(linha, headers, [
-    "Tp. Mercado",
-    "Tipo Mercado",
-    "Segmento",
-    "Mercado",
-  ]);
+        const segmento = segmentoEK;
 
         const cidade = porCabecalho(linha, headers, [
           "Municipio",
