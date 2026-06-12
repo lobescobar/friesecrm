@@ -366,9 +366,13 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
 
           if (error) {
   console.warn("Erro ao atualizar cliente:", error.message);
-  ignorados++;
+  ignoradosComErro++;
+
+  if (!primeiraMensagemErro) {
+    primeiraMensagemErro = error.message;
+  }
 } else {
-  atualizados++;
+  importados++;
 }
         }
 
