@@ -105,7 +105,7 @@ async function carregarClientesExistentes(
     codigo_cliente?: string;
   }> = [];
 
-  const lotesCodigos = lotes(codigosDaPlanilha, 500);
+  const lotesCodigos = lotes(codigosDaPlanilha, 100);
 
   for (let i = 0; i < lotesCodigos.length; i++) {
     setProgresso(
