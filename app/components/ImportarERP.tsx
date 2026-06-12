@@ -205,6 +205,7 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
         const razaoSocialD = texto(linha[3]);
         const nomeFantasiaE = texto(linha[4]);
         const cnpjAF = texto(linha[31]);
+        const segmentoEK = texto(linha[140]);
 
         const codigo =
           porCabecalho(linha, headers, ["Codigo", "Código", "Cod"]) ||
@@ -244,12 +245,14 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
 
         if (!empresa && !razao_social && !cnpj) continue;
 
-        const segmento = porCabecalho(linha, headers, [
-          "Tp. Mercado",
-          "Tipo Mercado",
-          "Segmento",
-          "Mercado",
-        ]);
+        const segmento =
+  segmentoEK ||
+  porCabecalho(linha, headers, [
+    "Tp. Mercado",
+    "Tipo Mercado",
+    "Segmento",
+    "Mercado",
+  ]);
 
         const cidade = porCabecalho(linha, headers, [
           "Municipio",
