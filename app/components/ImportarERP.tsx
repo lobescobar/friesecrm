@@ -359,10 +359,16 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
         setProgresso(`Atualizando lote ${i + 1}/${lotesAtualizacao.length}...`);
 
         for (const item of lotesAtualizacao[i]) {
-          const { error } = await supabase
-            .from("clientes")
-            .update(item.dados)
-            .eq("id", item.id);
+          const dadosAtualizacao = { ...item.dados };
+
+// Nunca atualizar codigo_cliente em cliente existente,
+// pois ele é UNIQUE no Supabase.
+delete dadosAtualizacao.codigo_cliente;
+
+const { error } = await supabase
+  .from("clientes")
+  .update(dadosAtualizacao)
+  .eq("id", item.id);
 
           if (error) {
   console.warn("Erro ao atualizar cliente:", error.message);
