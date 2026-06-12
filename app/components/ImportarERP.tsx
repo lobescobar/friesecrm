@@ -372,7 +372,7 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
     primeiraMensagemErro = error.message;
   }
 } else {
-  importados++;
+  atualizados++;
 }
         }
 
