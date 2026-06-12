@@ -100,7 +100,7 @@ async function carregarClientesExistentes(
       .range(inicio, inicio + tamanhoPagina - 1);
 
     if (error) {
-      throw new Error(`Erro ao consultar clientes existentes: ${error.message}`);
+      console.warn("Erro ao atualizar cliente:", error.message);
     }
 
     const pagina = data || [];
@@ -301,21 +301,21 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
       let ignoradosDuplicados = 0;
 
       clientesParaImportar.forEach((cliente) => {
-  const codigo = texto(cliente.codigo_cliente);
+        const codigo = texto(cliente.codigo_cliente);
 
-  // A chave principal do ERP é sempre o código completo: 000000-00
-  const id = codigo ? porCodigo.get(codigo) || "" : "";
+        // A chave principal do ERP é sempre o código completo: 000000-00
+        const id = codigo ? porCodigo.get(codigo) || "" : "";
 
-  const dados: ClienteImportacao = { ...cliente };
+        const dados: ClienteImportacao = { ...cliente };
 
-  if (id) {
-    // Cliente já existe pelo código ERP.
-    // Não atualiza o codigo_cliente para evitar conflito de UNIQUE.
-    delete dados.codigo_cliente;
+        if (id) {
+          // Cliente já existe pelo código ERP.
+          // Não atualiza o codigo_cliente para evitar conflito de UNIQUE.
+          delete dados.codigo_cliente;
 
-    paraAtualizar.push({ id, dados });
-    return;
-  }
+          paraAtualizar.push({ id, dados });
+          return;
+        }
 
         if (codigo && codigosReservados.has(codigo)) {
           ignoradosDuplicados++;
@@ -360,25 +360,25 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
         for (const item of lotesAtualizacao[i]) {
           const dadosAtualizacao = { ...item.dados };
 
-// Nunca atualizar codigo_cliente em cliente existente,
-// pois ele é UNIQUE no Supabase.
-delete dadosAtualizacao.codigo_cliente;
+          // Nunca atualizar codigo_cliente em cliente existente,
+          // pois ele é UNIQUE no Supabase.
+          delete dadosAtualizacao.codigo_cliente;
 
-const { error } = await supabase
-  .from("clientes")
-  .update(dadosAtualizacao)
-  .eq("id", item.id);
+          const { error } = await supabase
+            .from("clientes")
+            .update(dadosAtualizacao)
+            .eq("id", item.id);
 
           if (error) {
             console.warn("Erro ao atualizar cliente:", error.message);
             ignoradosComErro++;
-            
+
             if (!primeiraMensagemErro) {
-             primeiraMensagemErro = error.message;
+              primeiraMensagemErro = error.message;
             }
           } else {
             atualizados++;
-         }
+          }
         }
 
         await new Promise((resolve) => setTimeout(resolve, 100));
@@ -386,22 +386,18 @@ const { error } = await supabase
 
       alert(
         `Importação concluída.\n\n` +
-          `Inseridos: ${inseridos}\n` +
-          `Atualizados: ${atualizados}\n` +
-          `Ignorados sem código ERP: ${ignoradosSemCodigo}\n` +
-          `Ignorados por código duplicado: ${ignoradosDuplicados}\n` +
-          `Ignorados com erro: ${ignoradosComErro}` +
-          (primeiraMensagemErro ? `\n\nPrimeiro erro: ${primeiraMensagemErro}` : "")
+        `Inseridos: ${inseridos}\n` +
+        `Atualizados: ${atualizados}\n` +
+        `Ignorados sem código ERP: ${ignoradosSemCodigo}\n` +
+        `Ignorados por código duplicado: ${ignoradosDuplicados}\n` +
+        `Ignorados com erro: ${ignoradosComErro}` +
+        (primeiraMensagemErro ? `\n\nPrimeiro erro: ${primeiraMensagemErro}` : "")
       );
 
       onSucesso?.();
     } catch (err) {
       console.error("Erro na importação:", err);
-      alert(
-        err instanceof Error
-          ? err.message
-          : "Erro ao processar o arquivo .xlsx. Verifique o formato do arquivo."
-      );
+      alert("Erro inesperado durante a importação. Verifique o console ou tente novamente.");
     } finally {
       setCarregando(false);
       setProgresso("");
@@ -427,9 +423,8 @@ const { error } = await supabase
         type="button"
         onClick={() => document.getElementById("importarERP")?.click()}
         disabled={carregando}
-        className={`${
-          carregando ? "bg-slate-400" : "bg-slate-900 hover:bg-slate-800"
-        } text-white px-4 py-2 rounded-xl text-sm font-medium transition flex items-center gap-2`}
+        className={`${carregando ? "bg-slate-400" : "bg-slate-900 hover:bg-slate-800"
+          } text-white px-4 py-2 rounded-xl text-sm font-medium transition flex items-center gap-2`}
       >
         {carregando ? (
           <>
