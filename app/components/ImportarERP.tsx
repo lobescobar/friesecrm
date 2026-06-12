@@ -85,30 +85,44 @@ function montarCodigoCliente(codigoOriginal: string, lojaOriginal: string) {
 }
 
 async function carregarClientesExistentes(
+  clientesParaImportar: ClienteImportacao[],
   setProgresso: (mensagem: string) => void
 ) {
-  const todos: Array<{ id: string; codigo_cliente?: string; cnpj?: string }> = [];
-  const tamanhoPagina = 1000;
-  let inicio = 0;
+  const codigosDaPlanilha = Array.from(
+    new Set(
+      clientesParaImportar
+        .map((cliente) => texto(cliente.codigo_cliente))
+        .filter(Boolean)
+    )
+  );
 
-  while (true) {
-    setProgresso(`Buscando clientes existentes... ${todos.length}`);
+  if (!codigosDaPlanilha.length) {
+    return [];
+  }
+
+  const todos: Array<{
+    id: string;
+    codigo_cliente?: string;
+  }> = [];
+
+  const lotesCodigos = lotes(codigosDaPlanilha, 500);
+
+  for (let i = 0; i < lotesCodigos.length; i++) {
+    setProgresso(
+      `Buscando clientes existentes... ${i + 1}/${lotesCodigos.length}`
+    );
 
     const { data, error } = await supabase
       .from("clientes")
-      .select("id, codigo_cliente, cnpj")
-      .range(inicio, inicio + tamanhoPagina - 1);
+      .select("id, codigo_cliente")
+      .in("codigo_cliente", lotesCodigos[i]);
 
     if (error) {
-      console.warn("Erro ao atualizar cliente:", error.message);
+      console.error("Erro ao buscar clientes existentes:", error);
+      throw new Error("Erro ao consultar clientes existentes no Supabase.");
     }
 
-    const pagina = data || [];
-    todos.push(...pagina);
-
-    if (pagina.length < tamanhoPagina) break;
-
-    inicio += tamanhoPagina;
+    todos.push(...(data || []));
   }
 
   return todos;
@@ -277,23 +291,20 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
         return;
       }
 
-      const existentes = await carregarClientesExistentes(setProgresso);
+      const existentes = await carregarClientesExistentes(
+  clientesParaImportar,
+  setProgresso
+);
 
       const porCodigo = new Map<string, string>();
-      const porCnpj = new Map<string, string>();
-
+      
       existentes.forEach((cliente) => {
-        const codigo = texto(cliente.codigo_cliente);
-        const cnpj = somenteNumeros(texto(cliente.cnpj));
+  const codigo = texto(cliente.codigo_cliente);
 
-        if (codigo && !porCodigo.has(codigo)) {
-          porCodigo.set(codigo, cliente.id);
-        }
-
-        if (cnpj && !porCnpj.has(cnpj)) {
-          porCnpj.set(cnpj, cliente.id);
-        }
-      });
+  if (codigo && !porCodigo.has(codigo)) {
+    porCodigo.set(codigo, cliente.id);
+  }
+});
 
       const paraInserir: ClienteImportacao[] = [];
       const paraAtualizar: Array<{ id: string; dados: ClienteImportacao }> = [];
