@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { ChangeEvent } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../../lib/supabase";
 import { Cliente } from "../../types";
@@ -10,33 +11,40 @@ type ImportarERPProps = {
 };
 
 type ClienteImportacao = Partial<Cliente> & {
-  codigo_cliente?: string;
+  codigo_cliente: string;
   cnpj?: string;
 };
 
-const texto = (valor: any) => String(valor ?? "").trim();
+const texto = (valor: unknown) => String(valor ?? "").trim();
 
 const normalizar = (valor: string) =>
-  texto(valor)
+  valor
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
 
-const somenteNumeros = (valor: string) => texto(valor).replace(/\D/g, "");
+const somenteNumeros = (valor: string) => valor.replace(/\D/g, "");
 
-function acharIndice(headers: any[], nomes: string[]) {
-  const cabecalhos = headers.map((item) => normalizar(String(item ?? "")));
+function acharIndice(headers: unknown[], nomes: string[]) {
+  const headersNormalizados = headers.map((header) =>
+    normalizar(String(header ?? ""))
+  );
+
   const nomesNormalizados = nomes.map(normalizar);
 
-  return cabecalhos.findIndex((cabecalho) =>
+  return headersNormalizados.findIndex((header) =>
     nomesNormalizados.some(
-      (nome) => cabecalho === nome || cabecalho.includes(nome)
+      (nome) => header === nome || header.includes(nome)
     )
   );
 }
 
-function porCabecalho(linha: any[], headers: any[], nomes: string[]) {
+function porCabecalho(
+  linha: unknown[],
+  headers: unknown[],
+  nomes: string[]
+) {
   const indice = acharIndice(headers, nomes);
   return indice >= 0 ? texto(linha[indice]) : "";
 }
@@ -51,96 +59,29 @@ function lotes<T>(lista: T[], tamanho: number) {
   return resultado;
 }
 
-function montarCodigoCliente(codigoOriginal: string, lojaOriginal: string) {
-  const codigoTexto = texto(codigoOriginal);
-  const lojaTexto = texto(lojaOriginal);
+function montarCodigoCliente(codigo: string, loja: string) {
+  const codigoBase = somenteNumeros(String(codigo || ""));
+  const lojaBase = somenteNumeros(String(loja || "0")) || "0";
 
-  if (!codigoTexto) return "";
+  if (!codigoBase) return "";
 
-  // Caso a planilha já venha com o código completo no formato 000000-00.
-  const codigoCompleto = codigoTexto.match(/^(\d{1,6})\s*-\s*(\d{1,2})$/);
-
-  if (codigoCompleto) {
-    const codigo = codigoCompleto[1].padStart(6, "0");
-    const loja = codigoCompleto[2].padStart(2, "0");
-    return `${codigo}-${loja}`;
-  }
-
-  const codigoNumeros = somenteNumeros(codigoTexto);
-  const lojaNumeros = somenteNumeros(lojaTexto);
-
-  if (!codigoNumeros) return "";
-
-  // Se vierem 8 dígitos e não houver coluna Loja, considera os 2 últimos como loja.
-  if (!lojaNumeros && codigoNumeros.length > 6) {
-    const codigo = codigoNumeros.slice(0, 6).padStart(6, "0");
-    const loja = codigoNumeros.slice(6, 8).padStart(2, "0");
-    return `${codigo}-${loja}`;
-  }
-
-  const codigo = codigoNumeros.slice(0, 6).padStart(6, "0");
-  const loja = (lojaNumeros || "0").slice(0, 2).padStart(2, "0");
-
-  return `${codigo}-${loja}`;
-}
-
-async function carregarClientesExistentes(
-  clientesParaImportar: ClienteImportacao[],
-  setProgresso: (mensagem: string) => void
-) {
-  const codigosDaPlanilha = Array.from(
-    new Set(
-      clientesParaImportar
-        .map((cliente) => texto(cliente.codigo_cliente))
-        .filter(Boolean)
-    )
-  );
-
-  if (!codigosDaPlanilha.length) {
-    return [];
-  }
-
-  const todos: Array<{
-    id: string;
-    codigo_cliente?: string;
-  }> = [];
-
-  const lotesCodigos = lotes(codigosDaPlanilha, 100);
-
-  for (let i = 0; i < lotesCodigos.length; i++) {
-    setProgresso(
-      `Buscando clientes existentes... ${i + 1}/${lotesCodigos.length}`
-    );
-
-    const { data, error } = await supabase
-      .from("clientes")
-      .select("id, codigo_cliente")
-      .in("codigo_cliente", lotesCodigos[i]);
-
-    if (error) {
-      console.error("Erro ao buscar clientes existentes:", error);
-      throw new Error("Erro ao consultar clientes existentes no Supabase.");
-    }
-
-    todos.push(...(data || []));
-  }
-
-  return todos;
+  return `${codigoBase.padStart(6, "0")}-${lojaBase.padStart(2, "0")}`;
 }
 
 export default function ImportarERP({ onSucesso }: ImportarERPProps) {
   const [carregando, setCarregando] = useState(false);
   const [progresso, setProgresso] = useState("");
 
-  async function importarERP(e: React.ChangeEvent<HTMLInputElement>) {
+  async function importarERP(e: ChangeEvent<HTMLInputElement>) {
     const arquivo = e.target.files?.[0];
-    if (!arquivo) return;
+    if (!arquivo || carregando) return;
 
     setCarregando(true);
     setProgresso("Lendo planilha...");
 
     try {
       const dados = await arquivo.arrayBuffer();
+
       const workbook = XLSX.read(dados, {
         type: "array",
         cellDates: false,
@@ -149,11 +90,10 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
       const nomeAba = workbook.SheetNames[0];
       const aba = workbook.Sheets[nomeAba];
 
-      const rows: any[][] = XLSX.utils.sheet_to_json(aba, {
+      const rows: unknown[][] = XLSX.utils.sheet_to_json(aba, {
         header: 1,
         defval: "",
         blankrows: false,
-        raw: false,
       });
 
       if (!rows.length) {
@@ -164,14 +104,18 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
       let headerIndex = -1;
 
       for (let i = 0; i < rows.length; i++) {
-        const linha = rows[i].map((celula) => normalizar(String(celula ?? "")));
-        const temCodigo = linha.some(
+        const linhaNormalizada = rows[i].map((celula) =>
+          normalizar(String(celula ?? ""))
+        );
+
+        const temCodigo = linhaNormalizada.some(
           (valor) =>
             valor === "codigo" ||
             valor === "cod" ||
             valor.includes("codigo")
         );
-        const temNome = linha.some(
+
+        const temNome = linhaNormalizada.some(
           (valor) =>
             valor.includes("razao") ||
             valor.includes("nome") ||
@@ -186,7 +130,7 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
 
       if (headerIndex === -1) {
         alert(
-          'Não foi possível encontrar o cabeçalho da planilha. Verifique se existe a coluna "Codigo".'
+          'Não foi possível encontrar o cabeçalho da planilha. Verifique se existe a coluna "Código".'
         );
         return;
       }
@@ -194,31 +138,42 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
       const headers = rows[headerIndex];
       const linhasDados = rows.slice(headerIndex + 1);
 
-      setProgresso("Convertendo dados da planilha...");
+      setProgresso("Convertendo dados...");
 
       const clientesUnicos = new Map<string, ClienteImportacao>();
       let ignoradosSemCodigo = 0;
+      let ignoradosDuplicados = 0;
 
-      for (const linha of linhasDados) {
+      for (const [indiceLinha, linha] of linhasDados.entries()) {
+        const numeroLinhaExcel = headerIndex + 2 + indiceLinha;
+
+        const valorCelula = (coluna: string) => {
+          const celula = aba[`${coluna}${numeroLinhaExcel}`];
+          return texto(celula?.v ?? celula?.w ?? "");
+        };
+
         // Colunas fixas do ERP:
-        // D = Razão Social | E = Nome Fantasia | AF = CNPJ
-        const razaoSocialD = texto(linha[3]);
-        const nomeFantasiaE = texto(linha[4]);
-        const cnpjAF = texto(linha[31]);
-        const segmentoEK = texto(linha[140]);
+        // D = Razão Social | E = Nome Fantasia | AF = CNPJ | EK = Segmento
+        const razaoSocialD = valorCelula("D");
+        const nomeFantasiaE = valorCelula("E");
+        const cnpjAF = valorCelula("AF");
+        const segmentoEK = valorCelula("EK");
 
         const codigo =
           porCabecalho(linha, headers, ["Codigo", "Código", "Cod"]) ||
           texto(linha[0]);
 
-        const loja =
-          porCabecalho(linha, headers, ["Loja"]) ||
-          texto(linha[1]);
+        const loja = porCabecalho(linha, headers, ["Loja"]) || texto(linha[1]);
 
         const codigo_cliente = montarCodigoCliente(codigo, loja);
 
         if (!codigo_cliente) {
           ignoradosSemCodigo++;
+          continue;
+        }
+
+        if (clientesUnicos.has(codigo_cliente)) {
+          ignoradosDuplicados++;
           continue;
         }
 
@@ -240,12 +195,14 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
           ]);
 
         const empresa = nome_fantasia || razao_social;
+
         const cnpj =
-          cnpjAF || porCabecalho(linha, headers, ["CNPJ", "CNPJ/CPF", "CNPJ CPF"]);
+          cnpjAF ||
+          porCabecalho(linha, headers, ["CNPJ", "CNPJ/CPF", "CNPJ CPF"]);
 
-        if (!empresa && !razao_social && !cnpj) continue;
-
-        const segmento = segmentoEK;
+        if (!empresa && !razao_social && !cnpj) {
+          continue;
+        }
 
         const cidade = porCabecalho(linha, headers, [
           "Municipio",
@@ -254,6 +211,7 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
         ]);
 
         const estado = porCabecalho(linha, headers, ["Estado", "UF"]);
+
         const endereco = porCabecalho(linha, headers, [
           "Endereco",
           "Endereço",
@@ -266,108 +224,90 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
           nome_fantasia,
           razao_social,
           cnpj,
-          segmento: segmento ? segmento.toUpperCase() : "",
+          segmento: segmentoEK ? segmentoEK.toUpperCase() : "",
           cidade,
           estado: estado ? estado.toUpperCase() : "",
           endereco,
           status: "Novo",
         };
 
-        const chave = codigo_cliente;
-
-        // Se o mesmo código aparecer duas vezes na própria planilha,
-        // mantém a última ocorrência e envia apenas uma vez ao Supabase.
-        clientesUnicos.set(chave, cliente);
+        clientesUnicos.set(codigo_cliente, cliente);
       }
 
       const clientesParaImportar = Array.from(clientesUnicos.values());
 
       if (!clientesParaImportar.length) {
-        alert("Nenhum cliente com código ERP válido foi encontrado para importar.");
+        alert("Nenhum dado válido encontrado para importação.");
         return;
       }
 
-      const existentes = await carregarClientesExistentes(
-  clientesParaImportar,
-  setProgresso
-);
+      let inseridos = 0;
+      let atualizados = 0;
+      let ignoradosComErro = 0;
+      let primeiraMensagemErro = "";
 
-      const porCodigo = new Map<string, string>();
-      
-      existentes.forEach((cliente) => {
-  const codigo = texto(cliente.codigo_cliente);
+      const lotesImportacao = lotes(clientesParaImportar, 50);
 
-  if (codigo && !porCodigo.has(codigo)) {
-    porCodigo.set(codigo, cliente.id);
-  }
-});
+      for (let i = 0; i < lotesImportacao.length; i++) {
+        setProgresso(`Importando lote ${i + 1}/${lotesImportacao.length}...`);
 
-     let inseridos = 0;
-let atualizados = 0;
-let ignoradosComErro = 0;
-let ignoradosDuplicados = 0;
-let primeiraMensagemErro = "";
+        const { error } = await supabase.from("clientes").upsert(
+          lotesImportacao[i],
+          {
+            onConflict: "codigo_cliente",
+            ignoreDuplicates: false,
+          }
+        );
 
-const codigosUsados = new Set<string>();
+        if (error) {
+          console.warn("Erro ao importar lote:", error.message);
 
-const clientesParaUpsert = clientesParaImportar.filter((cliente) => {
-  const codigo = texto(cliente.codigo_cliente);
+          // Se um lote falhar, tenta item por item para salvar o máximo possível.
+          for (const cliente of lotesImportacao[i]) {
+            const { error: erroIndividual } = await supabase
+              .from("clientes")
+              .upsert(cliente, {
+                onConflict: "codigo_cliente",
+                ignoreDuplicates: false,
+              });
 
-  if (!codigo) {
-    ignoradosSemCodigo++;
-    return false;
-  }
+            if (erroIndividual) {
+              console.warn(
+                "Erro ao importar cliente:",
+                cliente.codigo_cliente,
+                erroIndividual.message
+              );
 
-  if (codigosUsados.has(codigo)) {
-    ignoradosDuplicados++;
-    return false;
-  }
+              ignoradosComErro++;
 
-  codigosUsados.add(codigo);
-  return true;
-});
+              if (!primeiraMensagemErro) {
+                primeiraMensagemErro = erroIndividual.message;
+              }
+            } else {
+              atualizados++;
+            }
+          }
+        } else {
+          atualizados += lotesImportacao[i].length;
+        }
 
-const lotesImportacao = lotes(clientesParaUpsert, 50);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
 
-for (let i = 0; i < lotesImportacao.length; i++) {
-  setProgresso(
-    `Importando lote ${i + 1}/${lotesImportacao.length}...`
-  );
-
-  const { error } = await supabase
-    .from("clientes")
-    .upsert(lotesImportacao[i], {
-      onConflict: "codigo_cliente",
-      ignoreDuplicates: false,
-    });
-
-  if (error) {
-    console.warn("Erro ao importar lote:", error.message);
-    ignoradosComErro += lotesImportacao[i].length;
-
-    if (!primeiraMensagemErro) {
-      primeiraMensagemErro = error.message;
-    }
-  } else {
-    atualizados += lotesImportacao[i].length;
-  }
-
-  await new Promise((resolve) => setTimeout(resolve, 100));
-}
       alert(
-        `Importação concluída.\n\n` +
-        `Inseridos: ${inseridos}\n` +
-        `Atualizados: ${atualizados}\n` +
-        `Ignorados sem código ERP: ${ignoradosSemCodigo}\n` +
-        `Ignorados por código duplicado: ${ignoradosDuplicados}\n` +
-        `Ignorados com erro: ${ignoradosComErro}` +
-        (primeiraMensagemErro ? `\n\nPrimeiro erro: ${primeiraMensagemErro}` : "")
+        `Importação concluída.\n\nInseridos: ${inseridos}\nAtualizados: ${atualizados}\nIgnorados sem código ERP: ${ignoradosSemCodigo}\nIgnorados por código duplicado: ${ignoradosDuplicados}\nIgnorados com erro: ${ignoradosComErro}${
+          primeiraMensagemErro
+            ? `\n\nPrimeiro erro encontrado:\n${primeiraMensagemErro}`
+            : ""
+        }`
       );
 
       onSucesso?.();
     } catch (err) {
       console.error("Erro na importação:", err);
-      alert("Erro inesperado durante a importação. Verifique o console ou tente novamente.");
+      alert(
+        "Erro inesperado durante a importação. Verifique o console ou tente novamente."
+      );
     } finally {
       setCarregando(false);
       setProgresso("");
@@ -393,8 +333,9 @@ for (let i = 0; i < lotesImportacao.length; i++) {
         type="button"
         onClick={() => document.getElementById("importarERP")?.click()}
         disabled={carregando}
-        className={`${carregando ? "bg-slate-400" : "bg-slate-900 hover:bg-slate-800"
-          } text-white px-4 py-2 rounded-xl text-sm font-medium transition flex items-center gap-2`}
+        className={`${
+          carregando ? "bg-slate-400" : "bg-slate-900 hover:bg-slate-800"
+        } text-white px-4 py-2 rounded-xl text-sm font-medium transition flex items-center gap-2`}
       >
         {carregando ? (
           <>
