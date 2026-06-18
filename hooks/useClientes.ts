@@ -1,16 +1,15 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { supabase } from "../lib/supabase";
-import { Cliente, Ordenacao, Profile } from "../types";
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { supabase } from '../lib/supabase';
+import { Cliente, Ordenacao, Profile } from '../types';
+import { normalizarTexto, somenteNumeros } from '../utils/formatters';
 
-const normalizarTexto = (valor?: string | null) =>
-  String(valor || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
+function valorOrdenacao(cliente: Cliente, coluna: keyof Cliente | 'cliente_nome') {
+  if (coluna === 'cliente_nome') {
+    return cliente.empresa || cliente.nome_fantasia || cliente.razao_social || '';
+  }
 
-const somenteNumeros = (valor?: string | null) =>
-  String(valor || "").replace(/\D/g, "");
+  return String(cliente[coluna] ?? '');
+}
 
 export function useClientes(profile: Profile | null) {
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -34,32 +33,25 @@ export function useClientes(profile: Profile | null) {
 
       while (true) {
         let query = supabase
-          .from("clientes")
-          .select("*")
-          .order("empresa", { ascending: true })
+          .from('clientes')
+          .select('*')
+          .order('empresa', { ascending: true })
           .range(inicio, inicio + tamanhoPagina - 1);
 
-        // Aplicar filtros de alçada se não for admin
-        if (profile.role !== "admin") {
-          if (
-            profile.segmentos_permitidos &&
-            profile.segmentos_permitidos.length > 0
-          ) {
-            query = query.in("segmento", profile.segmentos_permitidos);
+        if (profile.role !== 'admin') {
+          if (profile.segmentos_permitidos?.length) {
+            query = query.in('segmento', profile.segmentos_permitidos);
           }
 
-          if (
-            profile.estados_permitidos &&
-            profile.estados_permitidos.length > 0
-          ) {
-            query = query.in("estado", profile.estados_permitidos);
+          if (profile.estados_permitidos?.length) {
+            query = query.in('estado', profile.estados_permitidos);
           }
         }
 
-        const { data, error } = await query;
+        const { data, error: erroBusca } = await query;
 
-        if (error) {
-          throw error;
+        if (erroBusca) {
+          throw erroBusca;
         }
 
         const pagina = (data || []) as Cliente[];
@@ -73,105 +65,178 @@ export function useClientes(profile: Profile | null) {
       }
 
       setClientes(todos);
-      setError(null);
-    } catch (err: any) {
-      console.error("Erro ao carregar clientes:", err);
-      setError(err?.message || "Erro ao carregar clientes.");
+    } catch (err) {
+      const mensagem =
+        err instanceof Error ? err.message : 'Erro ao carregar clientes.';
+      console.error('Erro ao carregar clientes:', err);
+      setError(mensagem);
       setClientes([]);
     } finally {
       setLoading(false);
     }
   }, [profile]);
 
+  const atualizarCliente = useCallback(
+    async (id: string, dados: Partial<Cliente>) => {
+      const { data, error: erroAtualizacao } = await supabase
+        .from('clientes')
+        .update(dados)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (erroAtualizacao) {
+        throw erroAtualizacao;
+      }
+
+      const clienteAtualizado = data as Cliente;
+
+      setClientes((atuais) =>
+        atuais.map((cliente) =>
+          cliente.id === id ? { ...cliente, ...clienteAtualizado } : cliente
+        )
+      );
+
+      return clienteAtualizado;
+    },
+    []
+  );
+
   useEffect(() => {
-    carregarClientes();
+    const timeout = window.setTimeout(() => {
+      void carregarClientes();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
   }, [carregarClientes]);
 
-  return { clientes, loading, error, carregarClientes, setClientes };
+  return {
+    clientes,
+    loading,
+    error,
+    carregarClientes,
+    atualizarCliente,
+    setClientes
+  };
 }
 
 export function useFiltragemClientes(clientes: Cliente[]) {
-  const [buscaEmpresa, setBuscaEmpresa] = useState("");
-  const [buscaCodigo, setBuscaCodigo] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState("Todos");
-  const [filtroEstado, setFiltroEstado] = useState("Todos");
-  const [filtroSegmento, setFiltroSegmento] = useState("Todos");
+  const [buscaEmpresa, setBuscaEmpresa] = useState('');
+  const [buscaCodigo, setBuscaCodigo] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState('Todos');
+  const [filtroEstado, setFiltroEstado] = useState('Todos');
+  const [filtroSegmento, setFiltroSegmento] = useState('Todos');
 
   const [ordenacao, setOrdenacao] = useState<Ordenacao>({
-    coluna: "empresa",
-    direcao: "asc",
+    coluna: 'empresa',
+    direcao: 'asc'
   });
 
-  const alternarOrdenacao = (coluna: keyof Cliente | "cliente_nome") => {
-    setOrdenacao((prev) => ({
+  const segmentosUnicos = useMemo(() => {
+    return Array.from(
+      new Set(
+        clientes
+          .map((cliente) => cliente.segmento)
+          .filter((segmento): segmento is string => Boolean(segmento))
+      )
+    ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [clientes]);
+
+  const estadosUnicos = useMemo(() => {
+    return Array.from(
+      new Set(
+        clientes
+          .map((cliente) => cliente.estado)
+          .filter((estado): estado is string => Boolean(estado))
+      )
+    ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [clientes]);
+
+  const alternarOrdenacao = (coluna: keyof Cliente | 'cliente_nome') => {
+    setOrdenacao((atual) => ({
       coluna,
       direcao:
-        prev.coluna === coluna && prev.direcao === "asc" ? "desc" : "asc",
+        atual.coluna === coluna && atual.direcao === 'asc' ? 'desc' : 'asc'
     }));
   };
 
+  const limparFiltros = () => {
+    setBuscaEmpresa('');
+    setBuscaCodigo('');
+    setFiltroStatus('Todos');
+    setFiltroEstado('Todos');
+    setFiltroSegmento('Todos');
+  };
+
+  const filtrosAtivos = useMemo(() => {
+    const ativos: string[] = [];
+
+    if (buscaEmpresa.trim()) ativos.push(`Busca: ${buscaEmpresa.trim()}`);
+    if (buscaCodigo.trim()) ativos.push(`Código: ${buscaCodigo.trim()}`);
+    if (filtroStatus !== 'Todos') ativos.push(`Status: ${filtroStatus}`);
+    if (filtroEstado !== 'Todos') ativos.push(`UF: ${filtroEstado}`);
+    if (filtroSegmento !== 'Todos') ativos.push(`Segmento: ${filtroSegmento}`);
+
+    return ativos;
+  }, [buscaEmpresa, buscaCodigo, filtroStatus, filtroEstado, filtroSegmento]);
+
   const clientesFiltrados = useMemo(() => {
-    const termoBusca = normalizarTexto(buscaEmpresa);
-    const termoBuscaNumeros = somenteNumeros(buscaEmpresa);
-    const termoCodigo = normalizarTexto(buscaCodigo);
+    const buscaTexto = normalizarTexto(buscaEmpresa);
+    const buscaTextoNumeros = somenteNumeros(buscaEmpresa);
+    const buscaCodigoNormalizada = normalizarTexto(buscaCodigo);
 
-    return clientes
-      .filter((cliente) => {
-        const empresa = normalizarTexto(cliente.empresa);
-        const nomeFantasia = normalizarTexto(cliente.nome_fantasia);
-        const razaoSocial = normalizarTexto(cliente.razao_social);
-        const cnpjTexto = normalizarTexto(cliente.cnpj);
-        const cnpjNumeros = somenteNumeros(cliente.cnpj);
+    const filtrados = clientes.filter((cliente) => {
+      const cnpjNumeros = somenteNumeros(cliente.cnpj);
+      const camposBusca = [
+        cliente.empresa,
+        cliente.razao_social,
+        cliente.nome_fantasia,
+        cliente.cnpj,
+        cliente.codigo_cliente,
+        cliente.cidade,
+        cliente.estado
+      ]
+        .map(normalizarTexto)
+        .join(' ');
 
-        const matchEmpresa =
-          !termoBusca ||
-          empresa.includes(termoBusca) ||
-          nomeFantasia.includes(termoBusca) ||
-          razaoSocial.includes(termoBusca) ||
-          cnpjTexto.includes(termoBusca) ||
-          (!!termoBuscaNumeros && cnpjNumeros.includes(termoBuscaNumeros));
+      const passaEmpresa =
+        !buscaTexto ||
+        camposBusca.includes(buscaTexto) ||
+        (!!buscaTextoNumeros && cnpjNumeros.includes(buscaTextoNumeros));
 
-        const matchCodigo =
-          !termoCodigo ||
-          normalizarTexto(cliente.codigo_cliente).includes(termoCodigo);
+      const passaCodigo =
+        !buscaCodigoNormalizada ||
+        normalizarTexto(cliente.codigo_cliente).includes(buscaCodigoNormalizada);
 
-        const matchStatus =
-          filtroStatus === "Todos" || cliente.status === filtroStatus;
+      const passaStatus =
+        filtroStatus === 'Todos' || cliente.status === filtroStatus;
 
-        const matchEstado =
-          filtroEstado === "Todos" || cliente.estado === filtroEstado;
+      const passaEstado =
+        filtroEstado === 'Todos' || cliente.estado === filtroEstado;
 
-        const matchSegmento =
-          filtroSegmento === "Todos" || cliente.segmento === filtroSegmento;
+      const passaSegmento =
+        filtroSegmento === 'Todos' || cliente.segmento === filtroSegmento;
 
-        return (
-          matchEmpresa &&
-          matchCodigo &&
-          matchStatus &&
-          matchEstado &&
-          matchSegmento
-        );
-      })
-      .sort((a, b) => {
-        const valA = normalizarTexto(
-          ordenacao.coluna === "cliente_nome"
-            ? a.empresa
-            : String(a[ordenacao.coluna as keyof Cliente] || "")
-        );
+      return (
+        passaEmpresa &&
+        passaCodigo &&
+        passaStatus &&
+        passaEstado &&
+        passaSegmento
+      );
+    });
 
-        const valB = normalizarTexto(
-          ordenacao.coluna === "cliente_nome"
-            ? b.empresa
-            : String(b[ordenacao.coluna as keyof Cliente] || "")
-        );
+    return [...filtrados].sort((a, b) => {
+      const valorA = valorOrdenacao(a, ordenacao.coluna);
+      const valorB = valorOrdenacao(b, ordenacao.coluna);
 
-        const comparacao = valA.localeCompare(valB, "pt-BR", {
-          numeric: true,
-          sensitivity: "base",
-        });
-
-        return ordenacao.direcao === "asc" ? comparacao : -comparacao;
+      const comparacao = valorA.localeCompare(valorB, 'pt-BR', {
+        numeric: true,
+        sensitivity: 'base'
       });
+
+      return ordenacao.direcao === 'asc' ? comparacao : -comparacao;
+    });
   }, [
     clientes,
     buscaEmpresa,
@@ -179,24 +244,8 @@ export function useFiltragemClientes(clientes: Cliente[]) {
     filtroStatus,
     filtroEstado,
     filtroSegmento,
-    ordenacao,
+    ordenacao
   ]);
-
-  const estadosUnicos = useMemo(
-    () =>
-      Array.from(
-        new Set(clientes.map((cliente) => cliente.estado).filter(Boolean))
-      ).sort(),
-    [clientes]
-  );
-
-  const segmentosUnicos = useMemo(
-    () =>
-      Array.from(
-        new Set(clientes.map((cliente) => cliente.segmento).filter(Boolean))
-      ).sort(),
-    [clientes]
-  );
 
   return {
     buscaEmpresa,
@@ -214,5 +263,7 @@ export function useFiltragemClientes(clientes: Cliente[]) {
     clientesFiltrados,
     estadosUnicos,
     segmentosUnicos,
+    filtrosAtivos,
+    limparFiltros
   };
 }

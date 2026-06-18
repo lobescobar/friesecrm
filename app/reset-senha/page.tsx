@@ -1,86 +1,93 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
-import { supabase } from '../../lib/supabase'
-import { useRouter } from 'next/navigation'
+import { FormEvent, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '../../lib/supabase';
 
 export default function ResetSenha() {
-  const [novaSenha, setNovaSenha] = useState('')
-  const [carregando, setCarregando] = useState(false)
-  const [erro, setErro] = useState('')
-  const [mensagem, setMensagem] = useState('')
-  const router = useRouter()
+  const [novaSenha, setNovaSenha] = useState('');
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState('');
+  const [mensagem, setMensagem] = useState('');
+  const router = useRouter();
 
-  async function handleAtualizarSenha(e: React.FormEvent) {
-    e.preventDefault()
-    setErro('')
-    setCarregando(true)
+  async function handleAtualizarSenha(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setErro('');
+    setMensagem('');
 
     if (novaSenha.length < 6) {
-      setErro('A senha deve ter pelo menos 6 caracteres.')
-      setCarregando(false)
-      return
+      setErro('A senha deve ter pelo menos 6 caracteres.');
+      return;
     }
 
-    // Como o usuário clicou no link do email, ele JÁ ESTÁ logado.
-    // Então usamos updateUser para alterar a senha dele.
+    setCarregando(true);
+
     const { error } = await supabase.auth.updateUser({
       password: novaSenha
-    })
+    });
 
     if (error) {
-      setErro(`Erro ao atualizar senha: ${error.message}`)
-    } else {
-      setMensagem('Senha atualizada com sucesso! Redirecionando...')
-      setTimeout(() => {
-        router.push('/') // Joga pro CRM depois de 2 segundos
-      }, 2000)
+      setErro(`Erro ao atualizar senha: ${error.message}`);
+      setCarregando(false);
+      return;
     }
-    
-    setCarregando(false)
+
+    setMensagem('Senha atualizada com sucesso. Redirecionando...');
+    setCarregando(false);
+
+    window.setTimeout(() => {
+      router.push('/crm');
+    }, 1500);
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50">
-      <div className="w-full max-w-md p-8 bg-white rounded-3xl shadow-lg border border-slate-100">
-        <div className="text-center mb-8">
+    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+      <section className="w-full max-w-md rounded-3xl border border-slate-100 bg-white p-8 shadow-lg">
+        <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold text-slate-800">Criar Nova Senha</h1>
-          <p className="text-slate-500 text-sm mt-1">Digite sua nova credencial de acesso</p>
+          <p className="mt-1 text-sm text-slate-500">
+            Digite sua nova credencial de acesso
+          </p>
         </div>
 
         <form onSubmit={handleAtualizarSenha} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-slate-600">Nova Senha</label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-slate-600">
+              Nova Senha
+            </span>
             <input
               type="password"
               required
-              className="w-full px-4 py-3 bg-slate-100 text-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-slate-400 transition"
+              className="w-full rounded-xl bg-slate-100 px-4 py-3 text-slate-800 outline-none transition focus:ring-2 focus:ring-slate-400"
               value={novaSenha}
-              onChange={(e) => setNovaSenha(e.target.value)}
+              onChange={(event) => setNovaSenha(event.target.value)}
               disabled={carregando}
+              autoComplete="new-password"
             />
-          </div>
+          </label>
 
-          {erro && (
-            <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl border border-red-100">
+          {erro ? (
+            <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
               {erro}
             </div>
-          )}
-          {mensagem && (
-            <div className="bg-green-50 text-green-600 text-sm px-4 py-3 rounded-xl border border-green-100">
+          ) : null}
+
+          {mensagem ? (
+            <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-600">
               {mensagem}
             </div>
-          )}
+          ) : null}
 
           <button
             type="submit"
             disabled={carregando}
-            className="w-full mt-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-500 text-white font-medium py-3 rounded-xl transition"
+            className="mt-2 w-full rounded-xl bg-slate-900 py-3 font-medium text-white transition hover:bg-slate-800 disabled:bg-slate-500"
           >
-            {carregando ? 'Atualizando...' : 'Salvar Nova Senha'}
+            {carregando ? 'Atualizando...' : 'Salvar nova senha'}
           </button>
         </form>
-      </div>
-    </div>
-  )
+      </section>
+    </main>
+  );
 }

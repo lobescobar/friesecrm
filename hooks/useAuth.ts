@@ -1,61 +1,90 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { Profile } from '../types';
 
+function mensagemErro(error: unknown) {
+  return error instanceof Error ? error.message : 'Erro inesperado.';
+}
+
 export function useAuth() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const carregarPerfil = useCallback(async (userId: string, email: string) => {
-    // Tenta buscar o perfil
-    let { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
+    try {
+      setError(null);
 
-    // Se não existir (erro PGRST116 é "no rows found"), cria um perfil na hora
-    if (error && (error.code === 'PGRST116' || error.message.includes('no rows'))) {
-      const novoPerfil = {
-        id: userId,
-        email: email,
-        role: 'vendedor',
-        segmentos_permitidos: [],
-        estados_permitidos: []
-      };
-      
-      const { data: createdData, error: createError } = await supabase
+      const { data, error: erroBusca } = await supabase
         .from('profiles')
-        .insert([novoPerfil])
-        .select()
+        .select('*')
+        .eq('id', userId)
         .single();
-        
-      if (!createError) {
+
+      if (
+        erroBusca &&
+        (erroBusca.code === 'PGRST116' || erroBusca.message.includes('no rows'))
+      ) {
+        const novoPerfil = {
+          id: userId,
+          email,
+          role: 'vendedor',
+          segmentos_permitidos: [],
+          estados_permitidos: []
+        };
+
+        const { data: createdData, error: createError } = await supabase
+          .from('profiles')
+          .insert([novoPerfil])
+          .select()
+          .single();
+
+        if (createError) {
+          throw createError;
+        }
+
         setProfile(createdData as Profile);
+        return;
       }
-    } else if (!error && data) {
+
+      if (erroBusca) {
+        throw erroBusca;
+      }
+
       setProfile(data as Profile);
+    } catch (err) {
+      setError(mensagemErro(err));
+      setProfile(null);
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   }, []);
 
   useEffect(() => {
     const verificarSessao = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session }
+      } = await supabase.auth.getSession();
+
       if (session) {
         setUser(session.user);
         await carregarPerfil(session.user.id, session.user.email || '');
       } else {
+        setUser(null);
+        setProfile(null);
         setLoading(false);
       }
     };
 
     verificarSessao();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session) {
+        setLoading(true);
         setUser(session.user);
         await carregarPerfil(session.user.id, session.user.email || '');
       } else {
@@ -68,7 +97,7 @@ export function useAuth() {
     return () => subscription.unsubscribe();
   }, [carregarPerfil]);
 
-  const isAdmin = !!profile && profile.role === 'admin';
+  const isAdmin = profile?.role === 'admin';
 
-  return { user, profile, loading, isAdmin };
+  return { user, profile, loading, error, isAdmin };
 }

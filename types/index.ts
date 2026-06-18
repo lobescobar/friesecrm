@@ -2,29 +2,34 @@ import { StatusType } from '../utils/constants';
 
 export interface Cliente {
   id: string;
-  codigo_cliente?: string;
+  codigo_cliente?: string | null;
   empresa: string;
-  razao_social?: string;
-  nome_fantasia?: string;
-  cnpj?: string;
-  segmento?: string;
-  cidade: string;
-  estado: string;
+  razao_social?: string | null;
+  nome_fantasia?: string | null;
+  cnpj?: string | null;
+  segmento?: string | null;
+  cidade?: string | null;
+  estado?: string | null;
   status: StatusType | string;
-  endereco?: string;
-  observacoes?: string;
-  latitude?: string;
-  longitude?: string;
-  telefone?: string;
+  endereco?: string | null;
+  observacoes?: string | null;
+  latitude?: string | null;
+  longitude?: string | null;
+  telefone?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 export interface Contato {
   id: string;
   cliente_id: string;
   nome: string;
-  cargo?: string;
-  telefone?: string;
-  email?: string;
+  cargo?: string | null;
+  telefone?: string | null;
+  email?: string | null;
+  principal?: boolean | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 export interface Ordenacao {
@@ -38,4 +43,6 @@ export interface Profile {
   role: 'admin' | 'vendedor';
   segmentos_permitidos: string[];
   estados_permitidos: string[];
+  created_at?: string | null;
+  updated_at?: string | null;
 }

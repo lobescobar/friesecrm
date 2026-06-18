@@ -1,36 +1,101 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mini CRM Mapa
 
-## Getting Started
+Sistema comercial em Next.js para consulta de clientes, mapa, contatos, alçadas de usuário e importação de planilhas ERP.
 
-First, run the development server:
+## O que foi estabilizado nesta versão
+
+- A rota `/` redireciona para `/crm`, mantendo uma tela principal única.
+- O frontend foi dividido em componentes de CRM e componentes base de UI.
+- A importação ERP ganhou fluxo guiado com prévia, colunas reconhecidas, resumo antes da gravação e resultado final sem `alert()`.
+- A rota administrativa `/api/admin/create-user` valida o token do usuário e só permite criação por administradores.
+- O modal do cliente agora salva observações e status com feedback visual.
+- A tabela ganhou versão em cards para celular.
+- Foram adicionados estados de carregamento, erro e vazio.
+- A gestão de usuários passou a usar seleção de segmentos e estados, evitando texto livre.
+- O mapa ganhou legenda, enquadramento automático dos clientes filtrados e integração com o modal.
+- O projeto não deve versionar nem enviar `.env.local`, `.git`, `.next` e `node_modules`.
+
+## Variáveis de ambiente
+
+Copie `.env.example` para `.env.local` e preencha com os valores reais:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+A `SUPABASE_SERVICE_ROLE_KEY` deve ficar somente no servidor. Nunca publique essa chave em repositório público, prints, frontend ou arquivos enviados a terceiros.
+
+## Instalação
+
+```bash
+npm install
+```
+
+## Desenvolvimento
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abra:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```txt
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+A rota inicial redireciona para:
 
-## Learn More
+```txt
+http://localhost:3000/crm
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Validação
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Antes de publicar, rode:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run lint
+npm run typecheck
+npm run build
+```
 
-## Deploy on Vercel
+Nesta versão corrigida, os três comandos foram validados no ambiente de revisão.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Observações importantes sobre o banco
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+A importação ERP usa `upsert` com:
+
+```txt
+onConflict: "codigo_cliente"
+```
+
+Portanto, a coluna `codigo_cliente` precisa ter índice único no Supabase. Se não houver índice único, a importação pode falhar.
+
+## Arquivos importantes
+
+```txt
+app/crm/page.tsx
+components/crm/ImportarERP.tsx
+components/crm/ClienteModal.tsx
+components/crm/TabelaClientes.tsx
+components/crm/FiltrosClientes.tsx
+components/crm/GestaoUsuarios.tsx
+components/crm/MapaClientes.tsx
+hooks/useClientes.ts
+hooks/useContatos.ts
+hooks/useAuth.ts
+app/api/admin/create-user/route.ts
+lib/supabase.ts
+```
+
+## Backup recomendado
+
+Antes de novas alterações grandes, crie uma cópia da pasta com nome semelhante a:
+
+```txt
+backup-mini-crm-mapa-versao-corrigida-base-solida
+```
+
+Não substitua backups antigos sem confirmar que a versão nova está funcionando.

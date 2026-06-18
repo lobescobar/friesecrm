@@ -1,9 +1,15 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://ljecftxeqabvjzaajbab.supabase.co'
-const supabaseKey = 'sb_publishable_wgIoqkl0Y-nZGLe71nBJ4g_XBFLIqln'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if ((!supabaseUrl || !supabaseAnonKey) && typeof window !== 'undefined') {
+  console.error(
+    'Variáveis NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY precisam ser configuradas em .env.local.'
+  );
+}
 
 export const supabase = createClient(
-  supabaseUrl,
-  supabaseKey
-)
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder-anon-key'
+);
