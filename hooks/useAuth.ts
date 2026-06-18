@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { User } from '@supabase/supabase-js';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { Profile } from '../types';
 
@@ -13,89 +13,177 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const carregarPerfil = useCallback(async (userId: string, email: string) => {
-    try {
-      setError(null);
+  const userIdRef = useRef<string | null>(null);
+  const profileRef = useRef<Profile | null>(null);
+  const requisicaoAtualRef = useRef(0);
 
-      const { data, error: erroBusca } = await supabase
+  useEffect(() => {
+    userIdRef.current = user?.id ?? null;
+  }, [user?.id]);
+
+  useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
+
+  const carregarPerfil = useCallback(async (userId: string, email: string) => {
+    setError(null);
+
+    const { data, error: erroBusca } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (
+      erroBusca &&
+      (erroBusca.code === 'PGRST116' || erroBusca.message.includes('no rows'))
+    ) {
+      const novoPerfil = {
+        id: userId,
+        email,
+        role: 'vendedor',
+        segmentos_permitidos: [],
+        estados_permitidos: []
+      };
+
+      const { data: createdData, error: createError } = await supabase
         .from('profiles')
-        .select('*')
-        .eq('id', userId)
+        .insert([novoPerfil])
+        .select()
         .single();
 
-      if (
-        erroBusca &&
-        (erroBusca.code === 'PGRST116' || erroBusca.message.includes('no rows'))
-      ) {
-        const novoPerfil = {
-          id: userId,
-          email,
-          role: 'vendedor',
-          segmentos_permitidos: [],
-          estados_permitidos: []
-        };
+      if (createError) {
+        throw createError;
+      }
 
-        const { data: createdData, error: createError } = await supabase
-          .from('profiles')
-          .insert([novoPerfil])
-          .select()
-          .single();
+      return createdData as Profile;
+    }
 
-        if (createError) {
-          throw createError;
-        }
+    if (erroBusca) {
+      throw erroBusca;
+    }
 
-        setProfile(createdData as Profile);
+    return data as Profile;
+  }, []);
+
+  const aplicarSessao = useCallback(
+    async (session: Session | null, options?: { forcarPerfil?: boolean; mostrarLoading?: boolean }) => {
+      const idRequisicao = requisicaoAtualRef.current + 1;
+      requisicaoAtualRef.current = idRequisicao;
+
+      if (!session) {
+        setUser(null);
+        setProfile(null);
+        setError(null);
+        setLoading(false);
         return;
       }
 
-      if (erroBusca) {
-        throw erroBusca;
+      const mesmoUsuario = userIdRef.current === session.user.id;
+      const perfilJaCarregado = Boolean(profileRef.current);
+
+      setUser(session.user);
+
+      if (mesmoUsuario && perfilJaCarregado && !options?.forcarPerfil) {
+        setLoading(false);
+        return;
       }
 
-      setProfile(data as Profile);
-    } catch (err) {
-      setError(mensagemErro(err));
-      setProfile(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      if (options?.mostrarLoading ?? true) {
+        setLoading(true);
+      }
+
+      try {
+        const perfil = await carregarPerfil(
+          session.user.id,
+          session.user.email || ''
+        );
+
+        if (requisicaoAtualRef.current === idRequisicao) {
+          setProfile(perfil);
+          setError(null);
+        }
+      } catch (err) {
+        if (requisicaoAtualRef.current === idRequisicao) {
+          setProfile(null);
+          setError(mensagemErro(err));
+        }
+      } finally {
+        if (requisicaoAtualRef.current === idRequisicao) {
+          setLoading(false);
+        }
+      }
+    },
+    [carregarPerfil]
+  );
 
   useEffect(() => {
-    const verificarSessao = async () => {
-      const {
-        data: { session }
-      } = await supabase.auth.getSession();
+    let ativo = true;
+    let timerAuth: ReturnType<typeof setTimeout> | null = null;
 
-      if (session) {
-        setUser(session.user);
-        await carregarPerfil(session.user.id, session.user.email || '');
-      } else {
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
+    async function verificarSessaoInicial() {
+      setLoading(true);
+
+      try {
+        const {
+          data: { session },
+          error: erroSessao
+        } = await supabase.auth.getSession();
+
+        if (erroSessao) {
+          throw erroSessao;
+        }
+
+        if (ativo) {
+          await aplicarSessao(session, { forcarPerfil: true, mostrarLoading: true });
+        }
+      } catch (err) {
+        if (ativo) {
+          setUser(null);
+          setProfile(null);
+          setError(mensagemErro(err));
+          setLoading(false);
+        }
       }
-    };
+    }
 
-    verificarSessao();
+    verificarSessaoInicial();
 
     const {
       data: { subscription }
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session) {
-        setLoading(true);
-        setUser(session.user);
-        await carregarPerfil(session.user.id, session.user.email || '');
-      } else {
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (timerAuth) {
+        clearTimeout(timerAuth);
       }
+
+      timerAuth = setTimeout(() => {
+        if (!ativo) {
+          return;
+        }
+
+        if (event === 'TOKEN_REFRESHED' && session && profileRef.current) {
+          setUser(session.user);
+          setLoading(false);
+          return;
+        }
+
+        void aplicarSessao(session, {
+          forcarPerfil: event === 'SIGNED_IN' || event === 'USER_UPDATED',
+          mostrarLoading: event !== 'TOKEN_REFRESHED'
+        });
+      }, 0);
     });
 
-    return () => subscription.unsubscribe();
-  }, [carregarPerfil]);
+    return () => {
+      ativo = false;
+
+      if (timerAuth) {
+        clearTimeout(timerAuth);
+      }
+
+      subscription.unsubscribe();
+    };
+  }, [aplicarSessao]);
 
   const isAdmin = profile?.role === 'admin';
 
