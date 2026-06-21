@@ -46,3 +46,28 @@ export interface Profile {
   created_at?: string | null;
   updated_at?: string | null;
 }
+
+export type StatusOrcamentoCodigo = 'A' | 'B' | 'C';
+
+export interface HistoricoOrcamento {
+  id: string;
+  cliente_id?: string | null;
+
+  codigo_cliente: string;
+  loja: string;
+  codigo_cliente_loja: string;
+
+  numero_it_completo: string;
+  numero_orcamento: string;
+
+  pedido_venda?: string | null;
+
+  status: StatusOrcamentoCodigo;
+  status_descricao: string;
+
+  data_emissao: string;
+
+  origem_importacao?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}

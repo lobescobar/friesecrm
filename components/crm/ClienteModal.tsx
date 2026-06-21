@@ -12,6 +12,7 @@ import BadgeStatus from '../ui/BadgeStatus';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import ContatosCliente from './ContatosCliente';
+import HistoricoCliente from './HistoricoCliente';
 
 type ClienteModalProps = {
   cliente: Cliente;
@@ -46,7 +47,7 @@ export default function ClienteModal({
   const [status, setStatus] = useState(cliente.status || 'Novo');
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState<string | null>(null);
-
+  const [historicoAberto, setHistoricoAberto] = useState(false);
 
   const alterado =
     observacoes !== (cliente.observacoes || '') || status !== cliente.status;
@@ -185,7 +186,7 @@ export default function ClienteModal({
             </dl>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {whatsappEmpresa ? (
               <a
                 href={whatsappEmpresa}
@@ -225,6 +226,15 @@ export default function ClienteModal({
                 Sem endereço
               </button>
             )}
+
+            <Button
+              type="button"
+              variant={historicoAberto ? 'primary' : 'secondary'}
+              className="rounded-2xl py-3"
+              onClick={() => setHistoricoAberto((atual) => !atual)}
+            >
+              Histórico do Cliente
+            </Button>
           </div>
 
           <div className="space-y-2">
@@ -250,6 +260,10 @@ export default function ClienteModal({
           onAtualizar={onAtualizarContato}
           onExcluir={onExcluirContato}
         />
+
+        <div className="lg:col-span-2">
+          <HistoricoCliente clienteId={cliente.id} aberto={historicoAberto} />
+        </div>
       </div>
     </Modal>
   );
