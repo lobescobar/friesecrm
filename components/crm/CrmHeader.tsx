@@ -33,10 +33,9 @@ export default function CrmHeader({
         />
 
         <div className="hidden border-l border-slate-200 pl-4 md:block">
-          <h1 className="text-lg font-bold text-slate-900">Mini CRM Mapa</h1>
-          <p className="text-xs text-slate-500">
-            Clientes, mapa, contatos e importação ERP
-          </p>
+          <h1 className="text-lg font-bold text-slate-900">
+            Painel de Gestão Comercial
+          </h1>
         </div>
       </div>
 
