@@ -61,6 +61,10 @@ const icones = Object.entries(STATUS_COLORS).reduce((acc, [key, value]) => {
   return acc;
 }, {} as Record<StatusType, L.DivIcon>);
 
+function normalizarStatusCliente(status?: string | null): StatusType {
+  return status === 'Ativo' ? 'Ativo' : 'Inativo';
+}
+
 function BuscaMapa() {
   const map = useMap();
 
@@ -166,8 +170,8 @@ export default function MapaClientes({
         <CentralizarCliente cliente={clienteSelecionado} />
 
         {clientesComCoordenadas.map((cliente) => {
-          const status = (cliente.status || 'Novo') as StatusType;
-          const icone = icones[status] || icones.Novo;
+          const status = normalizarStatusCliente(cliente.status);
+          const icone = icones[status] || icones.Inativo;
 
           return (
             <Marker
@@ -184,7 +188,7 @@ export default function MapaClientes({
                       {[cliente.cidade, cliente.estado].filter(Boolean).join(' - ')}
                     </span>
                     <br />
-                    <span>Status: {cliente.status || 'Novo'}</span>
+                    <span>Status: {status}</span>
                   </div>
 
                   {onSelecionarCliente ? (

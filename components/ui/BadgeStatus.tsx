@@ -4,15 +4,19 @@ type BadgeStatusProps = {
   status?: string | null;
 };
 
+function normalizarStatusCliente(status?: string | null): StatusType {
+  return status === 'Ativo' || status === 'Inativo' ? status : 'Inativo';
+}
+
 export default function BadgeStatus({ status }: BadgeStatusProps) {
-  const nome = (status || 'Novo') as StatusType;
-  const classes = STATUS_COLORS[nome]?.classes || STATUS_COLORS.Novo.classes;
+  const nome = normalizarStatusCliente(status);
+  const classes = STATUS_COLORS[nome].classes;
 
   return (
     <span
       className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold ${classes}`}
     >
-      {status || 'Novo'}
+      {nome}
     </span>
   );
 }

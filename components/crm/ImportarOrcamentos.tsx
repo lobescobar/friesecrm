@@ -3,6 +3,7 @@
 import { ChangeEvent, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabase';
+import { MESES_STATUS_CLIENTE_ATIVO } from '../../utils/constants';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 
@@ -51,6 +52,7 @@ type ResumoOrcamentos = {
 type ResultadoImportacao = {
   enviados: number;
   lotes: number;
+  clientesAtivos: number;
 };
 
 type ImportarOrcamentosProps = {
@@ -112,6 +114,92 @@ function calcularDataLimite36Meses() {
   const data = new Date();
   data.setMonth(data.getMonth() - 36);
   return data.toISOString().slice(0, 10);
+}
+
+function calcularDataLimiteStatusCliente() {
+  const data = new Date();
+  data.setMonth(data.getMonth() - MESES_STATUS_CLIENTE_ATIVO);
+  return data.toISOString().slice(0, 10);
+}
+
+async function buscarClientesComOrcamentoRecente(dataLimite: string) {
+  const clientesAtivos = new Set<string>();
+  const tamanhoPagina = 1000;
+  let inicio = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('orcamentos_historico')
+      .select('cliente_id')
+      .not('cliente_id', 'is', null)
+      .gte('data_emissao', dataLimite)
+      .range(inicio, inicio + tamanhoPagina - 1);
+
+    if (error) {
+      throw error;
+    }
+
+    const pagina = (data || []) as Array<{ cliente_id: string | null }>;
+
+    pagina.forEach((linha) => {
+      if (linha.cliente_id) {
+        clientesAtivos.add(linha.cliente_id);
+      }
+    });
+
+    if (pagina.length < tamanhoPagina) {
+      break;
+    }
+
+    inicio += tamanhoPagina;
+  }
+
+  return Array.from(clientesAtivos);
+}
+
+async function atualizarStatusClientesEmLotes(
+  clienteIds: string[],
+  status: 'Ativo' | 'Inativo'
+) {
+  const atualizadoEm = new Date().toISOString();
+
+  for (const lote of lotes(clienteIds, 500)) {
+    const { error } = await supabase
+      .from('clientes')
+      .update({
+        status,
+        updated_at: atualizadoEm
+      })
+      .in('id', lote);
+
+    if (error) {
+      throw error;
+    }
+  }
+}
+
+async function recalcularStatusClientesPorHistorico() {
+  const dataLimite = calcularDataLimiteStatusCliente();
+  const clientesAtivos = await buscarClientesComOrcamentoRecente(dataLimite);
+  const atualizadoEm = new Date().toISOString();
+
+  const { error: erroInativos } = await supabase
+    .from('clientes')
+    .update({
+      status: 'Inativo',
+      updated_at: atualizadoEm
+    })
+    .not('id', 'is', null);
+
+  if (erroInativos) {
+    throw erroInativos;
+  }
+
+  await atualizarStatusClientesEmLotes(clientesAtivos, 'Ativo');
+
+  return {
+    clientesAtivos: clientesAtivos.length
+  };
 }
 
 function formatarData(dataIso?: string | null) {
@@ -626,13 +714,19 @@ export default function ImportarOrcamentos({ onSucesso }: ImportarOrcamentosProp
         }
       }
 
+      setMensagem('Histórico importado. Recalculando status dos clientes...');
+      const resultadoStatus = await recalcularStatusClientesPorHistorico();
+
       setResultado({
         enviados: registrosParaGravar.length,
-        lotes: pacotes.length
+        lotes: pacotes.length,
+        clientesAtivos: resultadoStatus.clientesAtivos
       });
 
       setMensagem(
-        'Histórico de orçamentos importado com sucesso. Abra um cliente para consultar.'
+        `Histórico de orçamentos importado com sucesso. Status recalculado: ${resultadoStatus.clientesAtivos.toLocaleString(
+          'pt-BR'
+        )} cliente(s) ativo(s) nos últimos ${MESES_STATUS_CLIENTE_ATIVO} meses.`
       );
       onSucesso?.();
     } catch (error) {
@@ -704,7 +798,8 @@ export default function ImportarOrcamentos({ onSucesso }: ImportarOrcamentosProp
                 Use a planilha Relatório de Orçamentos CRM. O sistema vai
                 considerar somente status A, B e C, ignorar status D, manter
                 apenas dados dos últimos 36 meses pela data de emissão e importar
-                a data de fechamento quando houver, guardar a descrição e a quantidade do item.
+                a data de fechamento quando houver, guardar a descrição e a quantidade do item. Após a importação, o status dos clientes será recalculado: Ativo com orçamento nos últimos{' '}
+                {MESES_STATUS_CLIENTE_ATIVO} meses; sem histórico recente, Inativo.
               </p>
 
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -883,6 +978,11 @@ export default function ImportarOrcamentos({ onSucesso }: ImportarOrcamentosProp
                 <p className="mt-1">
                   {resultado.enviados} registros enviados para o histórico em{' '}
                   {resultado.lotes} lote(s).
+                </p>
+                <p className="mt-1">
+                  {resultado.clientesAtivos.toLocaleString('pt-BR')} cliente(s)
+                  marcado(s) como Ativo(s) por orçamento nos últimos{' '}
+                  {MESES_STATUS_CLIENTE_ATIVO} meses. Os demais ficam Inativos.
                 </p>
               </section>
             ) : null}

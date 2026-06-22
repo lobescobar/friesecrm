@@ -165,12 +165,15 @@ function encontrarCabecalho(rows: unknown[][]) {
 }
 
 async function buscarClientesExistentes(codigos: string[]) {
-  const existentes = new Map<string, Pick<Cliente, 'codigo_cliente' | 'segmento'>>();
+  const existentes = new Map<
+    string,
+    Pick<Cliente, 'codigo_cliente' | 'segmento' | 'status'>
+  >();
 
   for (const lote of lotes(codigos, 500)) {
     const { data, error } = await supabase
       .from('clientes')
-      .select('codigo_cliente, segmento')
+      .select('codigo_cliente, segmento, status')
       .in('codigo_cliente', lote);
 
     if (error) {
@@ -182,7 +185,11 @@ async function buscarClientesExistentes(codigos: string[]) {
       if (codigo) {
         existentes.set(codigo, {
           codigo_cliente: codigo,
-          segmento: item.segmento || null
+          segmento: item.segmento || null,
+          status:
+            item.status === 'Ativo' || item.status === 'Inativo'
+              ? item.status
+              : 'Inativo'
         });
       }
     });
@@ -416,7 +423,7 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
           cidade,
           estado: estado ? estado.toUpperCase() : '',
           endereco,
-          status: 'Novo'
+          status: 'Inativo'
         };
 
         if (segmentoNormalizado) {
@@ -488,13 +495,16 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
       const codigosExistentes = new Set(clientesExistentes.keys());
 
       const clientesNormalizados = clientesParaImportar.map((cliente) => {
-        const segmentoAtualBanco = clientesExistentes.get(
-          cliente.codigo_cliente
-        )?.segmento;
+        const clienteAtualBanco = clientesExistentes.get(cliente.codigo_cliente);
 
         return {
           ...cliente,
-          segmento: cliente.segmento || segmentoAtualBanco || null
+          segmento: cliente.segmento || clienteAtualBanco?.segmento || null,
+          status:
+            clienteAtualBanco?.status === 'Ativo' ||
+            clienteAtualBanco?.status === 'Inativo'
+              ? clienteAtualBanco.status
+              : 'Inativo'
         };
       });
 
