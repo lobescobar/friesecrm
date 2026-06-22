@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction } from 'react';
-import { STATUS_OPTIONS } from '../../utils/constants';
+import { SEGMENTOS_CLIENTES, STATUS_OPTIONS } from '../../utils/constants';
 import Button from '../ui/Button';
 
 type FiltrosClientesProps = {
@@ -39,6 +39,14 @@ export default function FiltrosClientes({
   totalFiltrado,
   onLimparFiltros
 }: FiltrosClientesProps) {
+  const segmentosComClientes = SEGMENTOS_CLIENTES.filter((segmento) =>
+    segmentosUnicos.includes(segmento)
+  );
+
+  const segmentosParaFiltro = segmentosComClientes.length
+    ? segmentosComClientes
+    : SEGMENTOS_CLIENTES;
+
   return (
     <div className="border-b border-slate-200 bg-white px-5 py-4">
       <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -97,7 +105,7 @@ export default function FiltrosClientes({
             className="rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-slate-700 focus:outline-none"
           >
             <option value="Todos">Todos</option>
-            {segmentosUnicos.map((segmento) => (
+            {segmentosParaFiltro.map((segmento) => (
               <option key={segmento} value={segmento}>
                 {segmento}
               </option>

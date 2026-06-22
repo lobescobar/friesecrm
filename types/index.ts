@@ -61,6 +61,10 @@ export interface HistoricoOrcamento {
   numero_orcamento: string;
 
   pedido_venda?: string | null;
+  descricao_item?: string | null;
+  quantidade_item?: number | null;
+
+  data_fechamento?: string | null;
 
   status: StatusOrcamentoCodigo;
   status_descricao: string;

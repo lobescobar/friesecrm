@@ -18,6 +18,8 @@ import FiltrosClientes from '../../components/crm/FiltrosClientes';
 import TabelaClientes from '../../components/crm/TabelaClientes';
 import ClienteModal from '../../components/crm/ClienteModal';
 import GestaoUsuarios from '../../components/crm/GestaoUsuarios';
+import AlertaOrcamentosAbertos from '../../components/crm/AlertaOrcamentosAbertos';
+import { OrcamentoAbertoResumo } from '../../hooks/useOrcamentosAbertos';
 
 const MapaClientes = dynamic(() => import('../../components/crm/MapaClientes'), {
   ssr: false,
@@ -60,6 +62,9 @@ function CRMContent() {
   } = useFiltragemClientes(clientes);
 
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
+  const [historicoInicialAberto, setHistoricoInicialAberto] = useState(false);
+  const [orcamentoHistoricoFoco, setOrcamentoHistoricoFoco] = useState<string | null>(null);
+  const [versaoOrcamentosAbertos, setVersaoOrcamentosAbertos] = useState(0);
 
   const {
     contatos,
@@ -99,6 +104,38 @@ function CRMContent() {
     return atualizado;
   };
 
+  const atualizarAlertaOrcamentosAbertos = () => {
+    setVersaoOrcamentosAbertos((versaoAtual) => versaoAtual + 1);
+  };
+
+  const selecionarCliente = (cliente: Cliente) => {
+    setHistoricoInicialAberto(false);
+    setOrcamentoHistoricoFoco(null);
+    setClienteSelecionado(cliente);
+  };
+
+  const abrirHistoricoPorOrcamentoAberto = (orcamento: OrcamentoAbertoResumo) => {
+    if (!orcamento.cliente_id) {
+      return;
+    }
+
+    const cliente = clientes.find((item) => item.id === orcamento.cliente_id);
+
+    if (!cliente) {
+      return;
+    }
+
+    setHistoricoInicialAberto(true);
+    setOrcamentoHistoricoFoco(orcamento.numero_orcamento);
+    setClienteSelecionado(cliente);
+  };
+
+  const fecharClienteSelecionado = () => {
+    setClienteSelecionado(null);
+    setHistoricoInicialAberto(false);
+    setOrcamentoHistoricoFoco(null);
+  };
+
   if (verificandoLogin) {
     return (
       <main className="min-h-screen bg-slate-100 px-4 py-8">
@@ -120,6 +157,7 @@ function CRMContent() {
           isAdmin={isAdmin}
           usuarioEmail={user?.email}
           onImportacaoSucesso={carregarClientes}
+          onImportacaoOrcamentosSucesso={atualizarAlertaOrcamentosAbertos}
           onSair={sair}
         />
 
@@ -128,6 +166,11 @@ function CRMContent() {
             {erroAuth}
           </div>
         ) : null}
+
+        <AlertaOrcamentosAbertos
+          refreshKey={versaoOrcamentosAbertos}
+          onSelecionarOrcamento={abrirHistoricoPorOrcamentoAberto}
+        />
 
         {carregandoClientes ? (
           <div className="space-y-4">
@@ -162,7 +205,7 @@ function CRMContent() {
               <MapaClientes
                 clientes={clientesFiltrados}
                 clienteSelecionadoId={clienteSelecionado?.id}
-                onSelecionarCliente={setClienteSelecionado}
+                onSelecionarCliente={selecionarCliente}
               />
             </section>
 
@@ -198,7 +241,7 @@ function CRMContent() {
                 totalClientes={clientes.length}
                 ordenacao={ordenacao}
                 onOrdenar={alternarOrdenacao}
-                onSelecionarCliente={setClienteSelecionado}
+                onSelecionarCliente={selecionarCliente}
                 onLimparFiltros={limparFiltros}
               />
             </section>
@@ -208,12 +251,14 @@ function CRMContent() {
 
       {clienteSelecionado ? (
         <ClienteModal
-          key={clienteSelecionado.id}
+          key={`${clienteSelecionado.id}-${historicoInicialAberto ? 'historico' : 'dados'}-${orcamentoHistoricoFoco || 'sem-foco'}`}
           cliente={clienteSelecionado}
           contatos={contatos}
           carregandoContatos={carregandoContatos}
           erroContatos={erroContatos}
-          onClose={() => setClienteSelecionado(null)}
+          historicoInicialAberto={historicoInicialAberto}
+          orcamentoHistoricoFoco={orcamentoHistoricoFoco}
+          onClose={fecharClienteSelecionado}
           onAtualizarCliente={atualizarClienteSelecionado}
           onAdicionarContato={adicionarContato}
           onAtualizarContato={atualizarContato}

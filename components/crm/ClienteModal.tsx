@@ -19,6 +19,8 @@ type ClienteModalProps = {
   contatos: Contato[];
   carregandoContatos: boolean;
   erroContatos?: string | null;
+  historicoInicialAberto?: boolean;
+  orcamentoHistoricoFoco?: string | null;
   onClose: () => void;
   onAtualizarCliente: (id: string, dados: Partial<Cliente>) => Promise<Cliente>;
   onAdicionarContato: (contato: {
@@ -37,6 +39,8 @@ export default function ClienteModal({
   contatos,
   carregandoContatos,
   erroContatos,
+  historicoInicialAberto = false,
+  orcamentoHistoricoFoco = null,
   onClose,
   onAtualizarCliente,
   onAdicionarContato,
@@ -47,7 +51,7 @@ export default function ClienteModal({
   const [status, setStatus] = useState(cliente.status || 'Novo');
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState<string | null>(null);
-  const [historicoAberto, setHistoricoAberto] = useState(false);
+  const [historicoAberto, setHistoricoAberto] = useState(historicoInicialAberto);
 
   const alterado =
     observacoes !== (cliente.observacoes || '') || status !== cliente.status;
@@ -262,7 +266,11 @@ export default function ClienteModal({
         />
 
         <div className="lg:col-span-2">
-          <HistoricoCliente clienteId={cliente.id} aberto={historicoAberto} />
+          <HistoricoCliente
+            clienteId={cliente.id}
+            aberto={historicoAberto}
+            orcamentoFocoInicial={orcamentoHistoricoFoco}
+          />
         </div>
       </div>
     </Modal>

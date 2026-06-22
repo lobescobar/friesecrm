@@ -21,6 +21,15 @@ export type StatusType = keyof typeof STATUS_COLORS;
 
 export const STATUS_OPTIONS = Object.keys(STATUS_COLORS) as StatusType[];
 
+export const SEGMENTOS_CLIENTES = [
+  'Agroindustria',
+  'Corrugados',
+  'Tempera Indutiva',
+  'Tratamento Termico'
+] as const;
+
+export type SegmentoCliente = (typeof SEGMENTOS_CLIENTES)[number];
+
 export const ESTADOS_BRASIL = [
   'AC',
   'AL',

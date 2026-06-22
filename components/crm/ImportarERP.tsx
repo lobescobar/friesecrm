@@ -4,6 +4,8 @@ import { ChangeEvent, useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabase';
 import { Cliente } from '../../types';
+import { SEGMENTOS_CLIENTES } from '../../utils/constants';
+import type { SegmentoCliente } from '../../utils/constants';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 
@@ -24,6 +26,9 @@ type ResumoImportacao = {
   ignoradosSemDados: number;
   semNome: number;
   semCnpj: number;
+  segmentosReconhecidos: number;
+  segmentosVazios: number;
+  segmentosNaoReconhecidos: number;
   inseridosPrevistos: number;
   atualizadosPrevistos: number;
 };
@@ -43,6 +48,9 @@ const resumoInicial: ResumoImportacao = {
   ignoradosSemDados: 0,
   semNome: 0,
   semCnpj: 0,
+  segmentosReconhecidos: 0,
+  segmentosVazios: 0,
+  segmentosNaoReconhecidos: 0,
   inseridosPrevistos: 0,
   atualizadosPrevistos: 0
 };
@@ -57,6 +65,42 @@ const normalizar = (valor: string) =>
     .trim();
 
 const somenteNumeros = (valor: string) => valor.replace(/\D/g, '');
+
+function normalizarSegmentoERP(valor: string): SegmentoCliente | '' {
+  const segmentoNormalizado = normalizar(valor).replace(/\s+/g, ' ');
+
+  if (!segmentoNormalizado) return '';
+
+  if (
+    segmentoNormalizado === 'agroindustria' ||
+    segmentoNormalizado === 'agro industria' ||
+    segmentoNormalizado === 'agro-industria'
+  ) {
+    return 'Agroindustria';
+  }
+
+  if (segmentoNormalizado === 'corrugados') {
+    return 'Corrugados';
+  }
+
+  if (
+    segmentoNormalizado === 'tempera indutiva' ||
+    segmentoNormalizado === 'temper indutiva' ||
+    segmentoNormalizado === 'tempera-indutiva'
+  ) {
+    return 'Tempera Indutiva';
+  }
+
+  if (
+    segmentoNormalizado === 'tratamento termico' ||
+    segmentoNormalizado === 'tratamento-termico'
+  ) {
+    return 'Tratamento Termico';
+  }
+
+  return '';
+}
+
 
 function acharIndice(headers: unknown[], nomes: string[]) {
   const headersNormalizados = headers.map((header) =>
@@ -120,13 +164,13 @@ function encontrarCabecalho(rows: unknown[][]) {
   return -1;
 }
 
-async function buscarCodigosExistentes(codigos: string[]) {
-  const existentes = new Set<string>();
+async function buscarClientesExistentes(codigos: string[]) {
+  const existentes = new Map<string, Pick<Cliente, 'codigo_cliente' | 'segmento'>>();
 
   for (const lote of lotes(codigos, 500)) {
     const { data, error } = await supabase
       .from('clientes')
-      .select('codigo_cliente')
+      .select('codigo_cliente, segmento')
       .in('codigo_cliente', lote);
 
     if (error) {
@@ -135,11 +179,20 @@ async function buscarCodigosExistentes(codigos: string[]) {
 
     (data || []).forEach((item) => {
       const codigo = String(item.codigo_cliente || '');
-      if (codigo) existentes.add(codigo);
+      if (codigo) {
+        existentes.set(codigo, {
+          codigo_cliente: codigo,
+          segmento: item.segmento || null
+        });
+      }
     });
   }
 
   return existentes;
+}
+
+async function buscarCodigosExistentes(codigos: string[]) {
+  return new Set((await buscarClientesExistentes(codigos)).keys());
 }
 
 export default function ImportarERP({ onSucesso }: ImportarERPProps) {
@@ -170,7 +223,7 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
       { campo: 'Razão Social', origem: 'Coluna D / Cabeçalho' },
       { campo: 'Nome Fantasia', origem: 'Coluna E / Cabeçalho' },
       { campo: 'CNPJ', origem: 'Coluna AF / Cabeçalho' },
-      { campo: 'Segmento', origem: 'Coluna EK' },
+      { campo: 'Segmento', origem: 'Coluna EK / valores oficiais' },
       {
         campo: 'Cidade',
         origem: acharIndice(headers, ['Municipio', 'Município', 'Cidade']) >= 0 ? 'Cabeçalho' : 'Não encontrada'
@@ -275,6 +328,15 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
         const nomeFantasiaE = valorCelula('E');
         const cnpjAF = valorCelula('AF');
         const segmentoEK = valorCelula('EK');
+        const segmentoNormalizado = normalizarSegmentoERP(segmentoEK);
+
+        if (!segmentoEK) {
+          novoResumo.segmentosVazios++;
+        } else if (segmentoNormalizado) {
+          novoResumo.segmentosReconhecidos++;
+        } else {
+          novoResumo.segmentosNaoReconhecidos++;
+        }
 
         const codigo =
           porCabecalho(linha, cabecalho, ['Codigo', 'Código', 'Cod']) ||
@@ -290,6 +352,13 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
 
         if (unicos.has(codigo_cliente)) {
           novoResumo.ignoradosDuplicados++;
+
+          const clienteExistente = unicos.get(codigo_cliente);
+
+          if (clienteExistente && !clienteExistente.segmento && segmentoNormalizado) {
+            clienteExistente.segmento = segmentoNormalizado;
+          }
+
           continue;
         }
 
@@ -338,18 +407,23 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
           'Logradouro'
         ]);
 
-        unicos.set(codigo_cliente, {
+        const clienteImportacao: ClienteImportacao = {
           codigo_cliente,
           empresa,
           nome_fantasia,
           razao_social,
           cnpj,
-          segmento: segmentoEK ? segmentoEK.toUpperCase() : '',
           cidade,
           estado: estado ? estado.toUpperCase() : '',
           endereco,
           status: 'Novo'
-        });
+        };
+
+        if (segmentoNormalizado) {
+          clienteImportacao.segmento = segmentoNormalizado;
+        }
+
+        unicos.set(codigo_cliente, clienteImportacao);
       }
 
       const clientes = Array.from(unicos.values());
@@ -407,11 +481,24 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
     let primeiraMensagemErro = '';
 
     try {
-      const codigosExistentes = await buscarCodigosExistentes(
+      const clientesExistentes = await buscarClientesExistentes(
         clientesParaImportar.map((cliente) => cliente.codigo_cliente)
       );
 
-      const lotesImportacao = lotes(clientesParaImportar, 50);
+      const codigosExistentes = new Set(clientesExistentes.keys());
+
+      const clientesNormalizados = clientesParaImportar.map((cliente) => {
+        const segmentoAtualBanco = clientesExistentes.get(
+          cliente.codigo_cliente
+        )?.segmento;
+
+        return {
+          ...cliente,
+          segmento: cliente.segmento || segmentoAtualBanco || null
+        };
+      });
+
+      const lotesImportacao = lotes(clientesNormalizados, 50);
 
       for (let i = 0; i < lotesImportacao.length; i++) {
         setProgresso(`Importando lote ${i + 1}/${lotesImportacao.length}...`);
@@ -552,7 +639,27 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
                 Arquivo: {arquivoNome || 'nenhum arquivo selecionado'}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Mapeamento respeitado: D = razão social, E = nome fantasia, AF = CNPJ, EK = segmento.
+                Mapeamento respeitado: D = razão social, E = nome fantasia, AF = CNPJ, EK = segmento. Segmentos vazios em EK não alteram segmentos já existentes.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+              <p className="text-sm font-semibold text-blue-900">
+                Segmentos oficiais aceitos na coluna EK
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {SEGMENTOS_CLIENTES.map((segmento) => (
+                  <span
+                    key={segmento}
+                    className="rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-bold text-blue-700"
+                  >
+                    {segmento}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-blue-700">
+                Células vazias são desconsideradas. Valores fora dessa lista não
+                serão gravados como segmento.
               </p>
             </div>
 
@@ -621,6 +728,18 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
                     <div className="flex justify-between">
                       <dt>Sem CNPJ</dt>
                       <dd className="font-bold">{resumo.semCnpj}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt>Segmentos reconhecidos</dt>
+                      <dd className="font-bold">{resumo.segmentosReconhecidos}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt>Segmentos vazios desconsiderados</dt>
+                      <dd className="font-bold">{resumo.segmentosVazios}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt>Segmentos fora do padrão</dt>
+                      <dd className="font-bold">{resumo.segmentosNaoReconhecidos}</dd>
                     </div>
                   </dl>
                 </div>

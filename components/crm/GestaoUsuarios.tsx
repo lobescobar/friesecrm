@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Profile } from '../../types';
-import { ESTADOS_BRASIL } from '../../utils/constants';
+import { ESTADOS_BRASIL, SEGMENTOS_CLIENTES } from '../../utils/constants';
 import { valorLista } from '../../utils/validators';
 import Button from '../ui/Button';
 
@@ -32,6 +32,10 @@ function alternarItem(lista: string[], item: string) {
   return lista.includes(item)
     ? lista.filter((valor) => valor !== item)
     : [...lista, item];
+}
+
+function segmentoPermitido(valor: string) {
+  return (SEGMENTOS_CLIENTES as readonly string[]).includes(valor);
 }
 
 function ListaCheckbox({
@@ -92,13 +96,15 @@ export default function GestaoUsuarios({
   const [novoUsuario, setNovoUsuario] = useState<NovoUsuario>(novoUsuarioInicial);
   const [mensagem, setMensagem] = useState<string | null>(null);
 
-  const segmentos = useMemo(
-    () =>
-      Array.from(new Set(segmentosDisponiveis.map(valorLista).filter(Boolean))).sort(
-        (a, b) => a.localeCompare(b, 'pt-BR')
-      ),
-    [segmentosDisponiveis]
-  );
+  const segmentos = useMemo(() => {
+    const segmentosBancoPadronizados = segmentosDisponiveis
+      .map(valorLista)
+      .filter((segmento) => segmento && segmentoPermitido(segmento));
+
+    return Array.from(
+      new Set([...SEGMENTOS_CLIENTES, ...segmentosBancoPadronizados])
+    ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [segmentosDisponiveis]);
 
   const estados = useMemo(() => {
     const estadosBanco = estadosDisponiveis

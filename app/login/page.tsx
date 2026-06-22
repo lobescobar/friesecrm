@@ -89,19 +89,9 @@ export default function Login() {
           </label>
 
           <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-slate-600" htmlFor="senha">
-                Senha
-              </label>
-              <button
-                type="button"
-                onClick={handleRecuperarSenha}
-                disabled={carregando}
-                className="text-xs font-medium text-blue-600 hover:underline disabled:opacity-60"
-              >
-                Esqueceu a senha?
-              </button>
-            </div>
+            <label className="text-xs font-medium text-slate-600" htmlFor="senha">
+              Senha
+            </label>
 
             <div className="relative">
               <input
@@ -143,6 +133,15 @@ export default function Login() {
             className="mt-2 w-full rounded-xl bg-slate-900 py-3 font-medium text-white transition hover:bg-slate-800 disabled:bg-slate-500"
           >
             {carregando ? 'Entrando...' : 'Entrar'}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleRecuperarSenha}
+            disabled={carregando}
+            className="self-center text-xs font-medium text-blue-600 hover:underline disabled:opacity-60"
+          >
+            Esqueceu a senha?
           </button>
         </form>
       </section>

@@ -3,11 +3,13 @@
 import Image from 'next/image';
 import Button from '../ui/Button';
 import ImportarERP from './ImportarERP';
+import ImportarOrcamentos from './ImportarOrcamentos';
 
 type CrmHeaderProps = {
   isAdmin: boolean;
   usuarioEmail?: string | null;
   onImportacaoSucesso: () => void;
+  onImportacaoOrcamentosSucesso?: () => void;
   onSair: () => void;
 };
 
@@ -15,6 +17,7 @@ export default function CrmHeader({
   isAdmin,
   usuarioEmail,
   onImportacaoSucesso,
+  onImportacaoOrcamentosSucesso,
   onSair
 }: CrmHeaderProps) {
   return (
@@ -44,7 +47,12 @@ export default function CrmHeader({
           </span>
         ) : null}
 
-        {isAdmin ? <ImportarERP onSucesso={onImportacaoSucesso} /> : null}
+        {isAdmin ? (
+          <>
+            <ImportarERP onSucesso={onImportacaoSucesso} />
+            <ImportarOrcamentos onSucesso={onImportacaoOrcamentosSucesso} />
+          </>
+        ) : null}
 
         <Button type="button" variant="secondary" onClick={onSair}>
           Sair

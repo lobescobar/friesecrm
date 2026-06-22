@@ -19,6 +19,7 @@ create table if not exists public.orcamentos_historico (
   status_descricao text not null,
 
   data_emissao date not null,
+  data_fechamento date null,
 
   origem_importacao text default 'planilha_orcamentos_crm',
 
@@ -40,6 +41,9 @@ on public.orcamentos_historico (codigo_cliente_loja);
 
 create index if not exists idx_orcamentos_historico_data_emissao
 on public.orcamentos_historico (data_emissao);
+
+create index if not exists idx_orcamentos_historico_data_fechamento
+on public.orcamentos_historico (data_fechamento);
 
 create index if not exists idx_orcamentos_historico_status
 on public.orcamentos_historico (status);

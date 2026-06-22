@@ -1,14 +1,44 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useHistoricoCliente } from '../../hooks/useHistoricoCliente';
 import { HistoricoOrcamento } from '../../types';
 import Button from '../ui/Button';
 import LoadingSpinner from '../ui/LoadingSpinner';
+import Modal from '../ui/Modal';
 
 type HistoricoClienteProps = {
   clienteId: string;
   aberto: boolean;
+  orcamentoFocoInicial?: string | null;
+};
+
+type StatusFiltro = 'todos' | HistoricoOrcamento['status'];
+type ColunaOrdenacao =
+  | 'numero_orcamento'
+  | 'data_emissao'
+  | 'pedido_venda'
+  | 'data_fechamento';
+type DirecaoOrdenacao = 'asc' | 'desc';
+
+type HistoricoOrcamentoAgrupado = {
+  id: string;
+  chave: string;
+  data_emissao: string;
+  data_fechamento: string | null;
+  numero_orcamento: string;
+  pedido_venda: string | null;
+  status: HistoricoOrcamento['status'];
+  status_descricao: string;
+  quantidade_itens: number;
+  itens: HistoricoOrcamento[];
+};
+
+const rotulosOrdenacao: Record<ColunaOrdenacao, string> = {
+  numero_orcamento: 'Orçamento',
+  data_emissao: 'Emissão',
+  pedido_venda: 'Pedido de venda',
+  data_fechamento: 'Data de fechamento'
 };
 
 function formatarData(data?: string | null) {
@@ -21,6 +51,17 @@ function formatarData(data?: string | null) {
   }
 
   return data;
+}
+
+function formatarQuantidade(valor?: number | null) {
+  if (valor === null || valor === undefined) {
+    return '-';
+  }
+
+  return new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3
+  }).format(valor);
 }
 
 function obterClasseStatus(status: HistoricoOrcamento['status']) {
@@ -41,23 +82,209 @@ function obterDescricaoStatus(status: HistoricoOrcamento['status']) {
   return 'Cancelado';
 }
 
+function escolherStatus(
+  statusAtual: HistoricoOrcamento['status'],
+  novoStatus: HistoricoOrcamento['status']
+) {
+  const prioridade: Record<HistoricoOrcamento['status'], number> = {
+    B: 3,
+    A: 2,
+    C: 1
+  };
+
+  return prioridade[novoStatus] > prioridade[statusAtual]
+    ? novoStatus
+    : statusAtual;
+}
+
+function escolherDataFechamento(
+  dataAtual?: string | null,
+  novaData?: string | null
+) {
+  if (!dataAtual) return novaData || null;
+  if (!novaData) return dataAtual;
+
+  return novaData > dataAtual ? novaData : dataAtual;
+}
+
+function escolherPedidoVenda(
+  pedidoAtual?: string | null,
+  novoPedido?: string | null
+) {
+  if (pedidoAtual) return pedidoAtual;
+  if (novoPedido) return novoPedido;
+
+  return null;
+}
+
+function ordenarItensOrcamento(itens: HistoricoOrcamento[]) {
+  return [...itens].sort((a, b) =>
+    a.numero_it_completo.localeCompare(b.numero_it_completo, 'pt-BR', {
+      numeric: true,
+      sensitivity: 'base'
+    })
+  );
+}
+
+function agruparPorNumeroPrincipal(
+  historico: HistoricoOrcamento[]
+): HistoricoOrcamentoAgrupado[] {
+  const mapa = new Map<string, HistoricoOrcamentoAgrupado>();
+
+  historico.forEach((item) => {
+    const chave = `${item.codigo_cliente_loja}|${item.numero_orcamento}`;
+    const existente = mapa.get(chave);
+
+    if (!existente) {
+      mapa.set(chave, {
+        id: item.id,
+        chave,
+        data_emissao: item.data_emissao,
+        data_fechamento: item.data_fechamento || null,
+        numero_orcamento: item.numero_orcamento,
+        pedido_venda: item.pedido_venda || null,
+        status: item.status,
+        status_descricao: obterDescricaoStatus(item.status),
+        quantidade_itens: 1,
+        itens: [item]
+      });
+      return;
+    }
+
+    const statusEscolhido = escolherStatus(existente.status, item.status);
+    const itens = ordenarItensOrcamento([...existente.itens, item]);
+
+    mapa.set(chave, {
+      ...existente,
+      data_emissao:
+        item.data_emissao > existente.data_emissao
+          ? item.data_emissao
+          : existente.data_emissao,
+      data_fechamento: escolherDataFechamento(
+        existente.data_fechamento,
+        item.data_fechamento
+      ),
+      pedido_venda: escolherPedidoVenda(existente.pedido_venda, item.pedido_venda),
+      status: statusEscolhido,
+      status_descricao: obterDescricaoStatus(statusEscolhido),
+      quantidade_itens: itens.length,
+      itens
+    });
+  });
+
+  return Array.from(mapa.values());
+}
+
+function compararTexto(a: string | null, b: string | null) {
+  return (a || '').localeCompare(b || '', 'pt-BR', {
+    numeric: true,
+    sensitivity: 'base'
+  });
+}
+
+function compararDatas(a: string | null, b: string | null) {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+
+  return a.localeCompare(b);
+}
+
+function ordenarHistorico(
+  lista: HistoricoOrcamentoAgrupado[],
+  coluna: ColunaOrdenacao,
+  direcao: DirecaoOrdenacao
+) {
+  const multiplicador = direcao === 'asc' ? 1 : -1;
+
+  return [...lista].sort((a, b) => {
+    let comparacao = 0;
+
+    if (coluna === 'numero_orcamento') {
+      comparacao = compararTexto(a.numero_orcamento, b.numero_orcamento);
+    }
+
+    if (coluna === 'data_emissao') {
+      comparacao = compararDatas(a.data_emissao, b.data_emissao);
+    }
+
+    if (coluna === 'pedido_venda') {
+      comparacao = compararTexto(a.pedido_venda, b.pedido_venda);
+    }
+
+    if (coluna === 'data_fechamento') {
+      comparacao = compararDatas(a.data_fechamento, b.data_fechamento);
+    }
+
+    if (comparacao === 0) {
+      comparacao = compararTexto(a.numero_orcamento, b.numero_orcamento);
+    }
+
+    return comparacao * multiplicador;
+  });
+}
+
 export default function HistoricoCliente({
   clienteId,
-  aberto
+  aberto,
+  orcamentoFocoInicial = null
 }: HistoricoClienteProps) {
   const { historico, loading, error, carregarHistorico } = useHistoricoCliente(
     clienteId,
     aberto
   );
+  const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>('todos');
+  const [colunaOrdenacao, setColunaOrdenacao] =
+    useState<ColunaOrdenacao>('data_emissao');
+  const [direcaoOrdenacao, setDirecaoOrdenacao] =
+    useState<DirecaoOrdenacao>('desc');
+  const [orcamentoDetalhado, setOrcamentoDetalhado] =
+    useState<HistoricoOrcamentoAgrupado | null>(null);
+
+  const historicoAgrupado = useMemo(
+    () => agruparPorNumeroPrincipal(historico),
+    [historico]
+  );
+
+  const historicoFiltradoOrdenado = useMemo(() => {
+    const filtrado =
+      statusFiltro === 'todos'
+        ? historicoAgrupado
+        : historicoAgrupado.filter((item) => item.status === statusFiltro);
+
+    return ordenarHistorico(filtrado, colunaOrdenacao, direcaoOrdenacao);
+  }, [historicoAgrupado, statusFiltro, colunaOrdenacao, direcaoOrdenacao]);
 
   const resumo = useMemo(() => {
     return {
-      total: historico.length,
-      abertos: historico.filter((item) => item.status === 'A').length,
-      fechados: historico.filter((item) => item.status === 'B').length,
-      cancelados: historico.filter((item) => item.status === 'C').length
+      total: historicoAgrupado.length,
+      abertos: historicoAgrupado.filter((item) => item.status === 'A').length,
+      fechados: historicoAgrupado.filter((item) => item.status === 'B').length,
+      cancelados: historicoAgrupado.filter((item) => item.status === 'C').length
     };
-  }, [historico]);
+  }, [historicoAgrupado]);
+
+  const alternarOrdenacao = (coluna: ColunaOrdenacao) => {
+    if (colunaOrdenacao === coluna) {
+      setDirecaoOrdenacao((direcaoAtual) =>
+        direcaoAtual === 'asc' ? 'desc' : 'asc'
+      );
+      return;
+    }
+
+    setColunaOrdenacao(coluna);
+    setDirecaoOrdenacao(coluna.includes('data') ? 'desc' : 'asc');
+  };
+
+  const iconeOrdenacao = (coluna: ColunaOrdenacao) => {
+    if (colunaOrdenacao !== coluna) return '↕';
+
+    return direcaoOrdenacao === 'asc' ? '↑' : '↓';
+  };
+
+  const abrirDetalhes = (item: HistoricoOrcamentoAgrupado) => {
+    setOrcamentoDetalhado(item);
+  };
 
   if (!aberto) {
     return null;
@@ -71,8 +298,13 @@ export default function HistoricoCliente({
             Histórico do Cliente
           </h4>
           <p className="mt-1 text-sm text-slate-500">
-            Orçamentos dos últimos 36 meses vinculados ao cliente.
+            Orçamentos dos últimos 36 meses agrupados pelo número principal.
           </p>
+          {orcamentoFocoInicial ? (
+            <p className="mt-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800">
+              Orçamento selecionado pelo alerta: {orcamentoFocoInicial}
+            </p>
+          ) : null}
         </div>
 
         <Button
@@ -98,139 +330,443 @@ export default function HistoricoCliente({
         </div>
       ) : null}
 
-      {!loading && !error && historico.length === 0 ? (
+      {!loading && !error && historicoAgrupado.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
           Ainda não há orçamentos importados para este cliente nos últimos 36
           meses.
         </div>
       ) : null}
 
-      {!loading && !error && historico.length > 0 ? (
+      {!loading && !error && historicoAgrupado.length > 0 ? (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-2xl bg-slate-50 p-4">
+            <button
+              type="button"
+              onClick={() => setStatusFiltro('todos')}
+              className={`rounded-2xl p-4 text-left transition ${
+                statusFiltro === 'todos'
+                  ? 'ring-2 ring-slate-500'
+                  : 'bg-slate-50 hover:bg-slate-100'
+              }`}
+            >
               <p className="text-xs font-semibold uppercase text-slate-400">
                 Total
               </p>
               <p className="mt-1 text-2xl font-bold text-slate-900">
                 {resumo.total}
               </p>
-            </div>
+            </button>
 
-            <div className="rounded-2xl bg-blue-50 p-4">
+            <button
+              type="button"
+              onClick={() => setStatusFiltro('A')}
+              className={`rounded-2xl p-4 text-left transition ${
+                statusFiltro === 'A'
+                  ? 'ring-2 ring-blue-500'
+                  : 'bg-blue-50 hover:bg-blue-100'
+              }`}
+            >
               <p className="text-xs font-semibold uppercase text-blue-500">
                 Abertos
               </p>
               <p className="mt-1 text-2xl font-bold text-blue-700">
                 {resumo.abertos}
               </p>
-            </div>
+            </button>
 
-            <div className="rounded-2xl bg-green-50 p-4">
+            <button
+              type="button"
+              onClick={() => setStatusFiltro('B')}
+              className={`rounded-2xl p-4 text-left transition ${
+                statusFiltro === 'B'
+                  ? 'ring-2 ring-green-500'
+                  : 'bg-green-50 hover:bg-green-100'
+              }`}
+            >
               <p className="text-xs font-semibold uppercase text-green-500">
                 Fechados
               </p>
               <p className="mt-1 text-2xl font-bold text-green-700">
                 {resumo.fechados}
               </p>
-            </div>
+            </button>
 
-            <div className="rounded-2xl bg-red-50 p-4">
+            <button
+              type="button"
+              onClick={() => setStatusFiltro('C')}
+              className={`rounded-2xl p-4 text-left transition ${
+                statusFiltro === 'C'
+                  ? 'ring-2 ring-red-500'
+                  : 'bg-red-50 hover:bg-red-100'
+              }`}
+            >
               <p className="text-xs font-semibold uppercase text-red-500">
                 Cancelados
               </p>
               <p className="mt-1 text-2xl font-bold text-red-700">
                 {resumo.cancelados}
               </p>
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-end md:justify-between">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                Status
+                <select
+                  value={statusFiltro}
+                  onChange={(event) =>
+                    setStatusFiltro(event.target.value as StatusFiltro)
+                  }
+                  className="mt-1 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-slate-700"
+                >
+                  <option value="todos">Todos</option>
+                  <option value="A">Abertos</option>
+                  <option value="B">Fechados</option>
+                  <option value="C">Cancelados</option>
+                </select>
+              </label>
+
+              <label className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                Ordenar por
+                <select
+                  value={colunaOrdenacao}
+                  onChange={(event) =>
+                    setColunaOrdenacao(event.target.value as ColunaOrdenacao)
+                  }
+                  className="mt-1 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-slate-700"
+                >
+                  <option value="numero_orcamento">Orçamento</option>
+                  <option value="data_emissao">Data de emissão</option>
+                  <option value="pedido_venda">Pedido de venda</option>
+                  <option value="data_fechamento">Data de fechamento</option>
+                </select>
+              </label>
+
+              <label className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                Direção
+                <select
+                  value={direcaoOrdenacao}
+                  onChange={(event) =>
+                    setDirecaoOrdenacao(event.target.value as DirecaoOrdenacao)
+                  }
+                  className="mt-1 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-slate-700"
+                >
+                  <option value="asc">Crescente</option>
+                  <option value="desc">Decrescente</option>
+                </select>
+              </label>
+            </div>
+
+            <p className="text-sm text-slate-500">
+              Exibindo{' '}
+              <strong className="text-slate-800">
+                {historicoFiltradoOrdenado.length}
+              </strong>{' '}
+              de{' '}
+              <strong className="text-slate-800">{historicoAgrupado.length}</strong>{' '}
+              orçamento(s).
+            </p>
+          </div>
+
+          {historicoFiltradoOrdenado.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
+              Nenhum orçamento encontrado com o filtro selecionado.
+            </div>
+          ) : null}
+
+          {historicoFiltradoOrdenado.length > 0 ? (
+            <>
+              <div className="hidden overflow-hidden rounded-2xl border border-slate-200 md:block">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 text-left">
+                        <button
+                          type="button"
+                          onClick={() => alternarOrdenacao('numero_orcamento')}
+                          className="inline-flex items-center gap-1 font-bold"
+                        >
+                          Orçamento {iconeOrdenacao('numero_orcamento')}
+                        </button>
+                      </th>
+                      <th className="px-4 py-3 text-left">
+                        <button
+                          type="button"
+                          onClick={() => alternarOrdenacao('data_emissao')}
+                          className="inline-flex items-center gap-1 font-bold"
+                        >
+                          Data de emissão {iconeOrdenacao('data_emissao')}
+                        </button>
+                      </th>
+                      <th className="px-4 py-3 text-left">
+                        <button
+                          type="button"
+                          onClick={() => alternarOrdenacao('pedido_venda')}
+                          className="inline-flex items-center gap-1 font-bold"
+                        >
+                          Pedido de venda {iconeOrdenacao('pedido_venda')}
+                        </button>
+                      </th>
+                      <th className="px-4 py-3 text-left">
+                        <button
+                          type="button"
+                          onClick={() => alternarOrdenacao('data_fechamento')}
+                          className="inline-flex items-center gap-1 font-bold"
+                        >
+                          Data de fechamento {iconeOrdenacao('data_fechamento')}
+                        </button>
+                      </th>
+                      <th className="px-4 py-3 text-left">Status</th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {historicoFiltradoOrdenado.map((item) => {
+                      const destacado =
+                        orcamentoFocoInicial === item.numero_orcamento;
+
+                      return (
+                        <tr
+                          key={item.chave}
+                          className={destacado ? 'bg-blue-50' : 'hover:bg-slate-50'}
+                        >
+                          <td className="px-4 py-3">
+                            <button
+                              type="button"
+                              onClick={() => abrirDetalhes(item)}
+                              className="font-semibold text-blue-700 underline-offset-4 hover:underline"
+                            >
+                              {item.numero_orcamento}
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 font-medium text-slate-700">
+                            {formatarData(item.data_emissao)}
+                          </td>
+                          <td className="px-4 py-3 text-slate-700">
+                            {item.pedido_venda || '-'}
+                          </td>
+                          <td className="px-4 py-3 text-slate-700">
+                            {formatarData(item.data_fechamento)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`rounded-full border px-2 py-1 text-xs font-bold ${obterClasseStatus(
+                                item.status
+                              )}`}
+                            >
+                              {item.status_descricao}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="space-y-3 md:hidden">
+                {historicoFiltradoOrdenado.map((item) => {
+                  const destacado = orcamentoFocoInicial === item.numero_orcamento;
+
+                  return (
+                    <button
+                      key={item.chave}
+                      type="button"
+                      onClick={() => abrirDetalhes(item)}
+                      className={`block w-full rounded-2xl border p-4 text-left shadow-sm transition ${
+                        destacado
+                          ? 'border-blue-300 bg-blue-50'
+                          : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50'
+                      }`}
+                    >
+                      <div className="mb-3 flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase text-slate-400">
+                            Orçamento
+                          </p>
+                          <p className="text-base font-bold text-blue-700">
+                            {item.numero_orcamento}
+                          </p>
+                        </div>
+
+                        <span
+                          className={`rounded-full border px-2 py-1 text-xs font-bold ${obterClasseStatus(
+                            item.status
+                          )}`}
+                        >
+                          {item.status_descricao}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-xs font-semibold uppercase text-slate-400">
+                            Emissão
+                          </p>
+                          <p className="font-medium text-slate-700">
+                            {formatarData(item.data_emissao)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-xs font-semibold uppercase text-slate-400">
+                            Pedido de venda
+                          </p>
+                          <p className="font-medium text-slate-700">
+                            {item.pedido_venda || '-'}
+                          </p>
+                        </div>
+
+                        <div className="col-span-2">
+                          <p className="text-xs font-semibold uppercase text-slate-400">
+                            Data de fechamento
+                          </p>
+                          <p className="font-medium text-slate-700">
+                            {formatarData(item.data_fechamento)}
+                          </p>
+                        </div>
+                      </div>
+
+                      <p className="mt-3 text-sm font-bold text-blue-700">
+                        Ver itens do orçamento
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!loading && !error && historicoAgrupado.length > 0 ? (
+        <p className="mt-4 text-xs text-slate-400">
+          Ordenação atual: {rotulosOrdenacao[colunaOrdenacao]} /{' '}
+          {direcaoOrdenacao === 'asc' ? 'crescente' : 'decrescente'}. Clique no
+          número do orçamento para visualizar os itens e descrições.
+        </p>
+      ) : null}
+
+      {orcamentoDetalhado ? (
+        <Modal
+          title={`Orçamento ${orcamentoDetalhado.numero_orcamento}`}
+          subtitle="Itens, descrições e quantidades importados da planilha"
+          onClose={() => setOrcamentoDetalhado(null)}
+          footer={
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setOrcamentoDetalhado(null)}
+              >
+                Fechar
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm sm:grid-cols-4">
+              <div>
+                <p className="text-xs font-bold uppercase text-slate-400">
+                  Emissão
+                </p>
+                <p className="font-semibold text-slate-800">
+                  {formatarData(orcamentoDetalhado.data_emissao)}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase text-slate-400">
+                  Pedido venda
+                </p>
+                <p className="font-semibold text-slate-800">
+                  {orcamentoDetalhado.pedido_venda || '-'}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase text-slate-400">
+                  Fechamento
+                </p>
+                <p className="font-semibold text-slate-800">
+                  {formatarData(orcamentoDetalhado.data_fechamento)}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase text-slate-400">
+                  Status
+                </p>
+                <span
+                  className={`mt-1 inline-flex rounded-full border px-2 py-1 text-xs font-bold ${obterClasseStatus(
+                    orcamentoDetalhado.status
+                  )}`}
+                >
+                  {orcamentoDetalhado.status_descricao}
+                </span>
+              </div>
+            </div>
+
+            <div className="hidden overflow-hidden rounded-2xl border border-slate-200 md:block">
+              <table className="min-w-full divide-y divide-slate-200 text-sm">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3 text-left">Número item</th>
+                    <th className="px-4 py-3 text-left">Descrição</th>
+                    <th className="px-4 py-3 text-left">Quantidade</th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {ordenarItensOrcamento(orcamentoDetalhado.itens).map((item) => (
+                    <tr key={item.id} className="hover:bg-slate-50">
+                      <td className="w-44 px-4 py-3 font-semibold text-slate-800">
+                        {item.numero_it_completo}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {item.descricao_item || '-'}
+                      </td>
+                      <td className="w-36 px-4 py-3 text-slate-700">
+                        {formatarQuantidade(item.quantidade_item)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="space-y-3 md:hidden">
+              {ordenarItensOrcamento(orcamentoDetalhado.itens).map((item) => (
+                <div
+                  key={item.id}
+                  className="rounded-2xl border border-slate-200 bg-white p-4"
+                >
+                  <p className="text-xs font-bold uppercase text-slate-400">
+                    Número item
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    {item.numero_it_completo}
+                  </p>
+
+                  <p className="mt-3 text-xs font-bold uppercase text-slate-400">
+                    Descrição
+                  </p>
+                  <p className="text-sm text-slate-700">
+                    {item.descricao_item || '-'}
+                  </p>
+
+                  <p className="mt-3 text-xs font-bold uppercase text-slate-400">
+                    Quantidade
+                  </p>
+                  <p className="text-sm font-semibold text-slate-700">
+                    {formatarQuantidade(item.quantidade_item)}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
-
-          <div className="hidden overflow-hidden rounded-2xl border border-slate-200 md:block">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-                <tr>
-                  <th className="px-4 py-3 text-left">Data emissão</th>
-                  <th className="px-4 py-3 text-left">Orçamento</th>
-                  <th className="px-4 py-3 text-left">Pedido venda</th>
-                  <th className="px-4 py-3 text-left">Status</th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {historico.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-700">
-                      {formatarData(item.data_emissao)}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {item.numero_it_completo}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {item.pedido_venda || '-'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full border px-2 py-1 text-xs font-bold ${obterClasseStatus(
-                          item.status
-                        )}`}
-                      >
-                        {obterDescricaoStatus(item.status)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="space-y-3 md:hidden">
-            {historico.map((item) => (
-              <div
-                key={item.id}
-                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-              >
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase text-slate-400">
-                      Orçamento
-                    </p>
-                    <p className="text-base font-bold text-slate-900">
-                      {item.numero_it_completo}
-                    </p>
-                  </div>
-
-                  <span
-                    className={`rounded-full border px-2 py-1 text-xs font-bold ${obterClasseStatus(
-                      item.status
-                    )}`}
-                  >
-                    {obterDescricaoStatus(item.status)}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-xs font-semibold uppercase text-slate-400">
-                      Emissão
-                    </p>
-                    <p className="font-medium text-slate-700">
-                      {formatarData(item.data_emissao)}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-semibold uppercase text-slate-400">
-                      Pedido venda
-                    </p>
-                    <p className="font-medium text-slate-700">
-                      {item.pedido_venda || '-'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        </Modal>
       ) : null}
     </section>
   );
