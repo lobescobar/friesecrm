@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useHistoricoCliente } from '../../hooks/useHistoricoCliente';
+import { useAuth } from '../../hooks/useAuth';
 import { HistoricoOrcamento } from '../../types';
 import Button from '../ui/Button';
 import LoadingSpinner from '../ui/LoadingSpinner';
@@ -80,6 +81,27 @@ function obterDescricaoStatus(status: HistoricoOrcamento['status']) {
   if (status === 'A') return 'Aberto';
   if (status === 'B') return 'Fechado';
   return 'Cancelado';
+}
+
+function montarUrlEmailCancelamento(params: {
+  numeroOrcamento: string;
+  solicitante: string;
+  motivo: string;
+}) {
+  const assunto = `Solicitação de cancelamento do orçamento ${params.numeroOrcamento}`;
+  const corpo = [
+    'Favor cancelar o orçamento a seguir.',
+    '',
+    `Número do orçamento: ${params.numeroOrcamento}`,
+    `Vendedor/Solicitante CRM: ${params.solicitante}`,
+    `Motivo: ${params.motivo}`,
+    '',
+    'Solicitação enviada pelo Painel de Gestão Comercial.'
+  ].join('\n');
+
+  return `mailto:vendas.ai@friese.com.br?subject=${encodeURIComponent(
+    assunto
+  )}&body=${encodeURIComponent(corpo)}`;
 }
 
 function escolherStatus(
@@ -233,6 +255,7 @@ export default function HistoricoCliente({
     clienteId,
     aberto
   );
+  const { user, profile } = useAuth();
   const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>('todos');
   const [colunaOrdenacao, setColunaOrdenacao] =
     useState<ColunaOrdenacao>('data_emissao');
@@ -240,6 +263,13 @@ export default function HistoricoCliente({
     useState<DirecaoOrdenacao>('desc');
   const [orcamentoDetalhado, setOrcamentoDetalhado] =
     useState<HistoricoOrcamentoAgrupado | null>(null);
+  const [orcamentoCancelamento, setOrcamentoCancelamento] =
+    useState<HistoricoOrcamentoAgrupado | null>(null);
+  const [motivoCancelamento, setMotivoCancelamento] = useState('');
+  const [erroCancelamento, setErroCancelamento] = useState<string | null>(null);
+  const [mensagemCancelamento, setMensagemCancelamento] = useState<string | null>(
+    null
+  );
 
   const historicoAgrupado = useMemo(
     () => agruparPorNumeroPrincipal(historico),
@@ -286,6 +316,46 @@ export default function HistoricoCliente({
     setOrcamentoDetalhado(item);
   };
 
+  const abrirSolicitacaoCancelamento = (item: HistoricoOrcamentoAgrupado) => {
+    setOrcamentoCancelamento(item);
+    setMotivoCancelamento('');
+    setErroCancelamento(null);
+    setMensagemCancelamento(null);
+  };
+
+  const fecharSolicitacaoCancelamento = () => {
+    setOrcamentoCancelamento(null);
+    setMotivoCancelamento('');
+    setErroCancelamento(null);
+  };
+
+  const confirmarSolicitacaoCancelamento = () => {
+    if (!orcamentoCancelamento) return;
+
+    const motivo = motivoCancelamento.trim();
+
+    if (motivo.length < 5) {
+      setErroCancelamento(
+        'Informe um motivo com pelo menos 5 caracteres para solicitar o cancelamento.'
+      );
+      return;
+    }
+
+    const solicitante =
+      profile?.email || user?.email || 'Usuário não identificado no CRM';
+
+    window.location.href = montarUrlEmailCancelamento({
+      numeroOrcamento: orcamentoCancelamento.numero_orcamento,
+      solicitante,
+      motivo
+    });
+
+    setMensagemCancelamento(
+      `E-mail de solicitação preparado para o orçamento ${orcamentoCancelamento.numero_orcamento}. Confirme o envio no seu aplicativo de e-mail.`
+    );
+    fecharSolicitacaoCancelamento();
+  };
+
   if (!aberto) {
     return null;
   }
@@ -316,6 +386,12 @@ export default function HistoricoCliente({
           Atualizar
         </Button>
       </div>
+
+      {mensagemCancelamento ? (
+        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-800">
+          {mensagemCancelamento}
+        </div>
+      ) : null}
 
       {loading ? (
         <div className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
@@ -518,6 +594,7 @@ export default function HistoricoCliente({
                         </button>
                       </th>
                       <th className="px-4 py-3 text-left">Status</th>
+                      <th className="px-4 py-3 text-left">Ação</th>
                     </tr>
                   </thead>
 
@@ -558,6 +635,20 @@ export default function HistoricoCliente({
                               {item.status_descricao}
                             </span>
                           </td>
+                          <td className="px-4 py-3">
+                            {item.status === 'A' ? (
+                              <Button
+                                type="button"
+                                variant="danger"
+                                className="px-3 py-1 text-xs"
+                                onClick={() => abrirSolicitacaoCancelamento(item)}
+                              >
+                                Solicitar cancelamento
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-slate-400">-</span>
+                            )}
+                          </td>
                         </tr>
                       );
                     })}
@@ -570,10 +661,8 @@ export default function HistoricoCliente({
                   const destacado = orcamentoFocoInicial === item.numero_orcamento;
 
                   return (
-                    <button
+                    <div
                       key={item.chave}
-                      type="button"
-                      onClick={() => abrirDetalhes(item)}
                       className={`block w-full rounded-2xl border p-4 text-left shadow-sm transition ${
                         destacado
                           ? 'border-blue-300 bg-blue-50'
@@ -628,10 +717,28 @@ export default function HistoricoCliente({
                         </div>
                       </div>
 
-                      <p className="mt-3 text-sm font-bold text-blue-700">
-                        Ver itens do orçamento
-                      </p>
-                    </button>
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="w-full"
+                          onClick={() => abrirDetalhes(item)}
+                        >
+                          Ver itens do orçamento
+                        </Button>
+
+                        {item.status === 'A' ? (
+                          <Button
+                            type="button"
+                            variant="danger"
+                            className="w-full"
+                            onClick={() => abrirSolicitacaoCancelamento(item)}
+                          >
+                            Solicitar cancelamento
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -654,7 +761,20 @@ export default function HistoricoCliente({
           subtitle="Itens, descrições e quantidades importados da planilha"
           onClose={() => setOrcamentoDetalhado(null)}
           footer={
-            <div className="flex justify-end">
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              {orcamentoDetalhado.status === 'A' ? (
+                <Button
+                  type="button"
+                  variant="danger"
+                  onClick={() => {
+                    setOrcamentoDetalhado(null);
+                    abrirSolicitacaoCancelamento(orcamentoDetalhado);
+                  }}
+                >
+                  Solicitar cancelamento
+                </Button>
+              ) : null}
+
               <Button
                 type="button"
                 variant="secondary"
@@ -765,6 +885,93 @@ export default function HistoricoCliente({
                 </div>
               ))}
             </div>
+          </div>
+        </Modal>
+      ) : null}
+
+      {orcamentoCancelamento ? (
+        <Modal
+          title={`Solicitar cancelamento do orçamento ${orcamentoCancelamento.numero_orcamento}`}
+          subtitle="O CRM abrirá um e-mail pronto para envio ao time de vendas."
+          onClose={fecharSolicitacaoCancelamento}
+          footer={
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={fecharSolicitacaoCancelamento}
+              >
+                Voltar
+              </Button>
+
+              <Button
+                type="button"
+                variant="danger"
+                onClick={confirmarSolicitacaoCancelamento}
+              >
+                Preparar e-mail
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <p className="font-semibold">
+                Esta ação não altera o status do orçamento no CRM nem no ERP.
+              </p>
+              <p className="mt-1">
+                Ela prepara um e-mail para solicitar o cancelamento ao endereço
+                vendas.ai@friese.com.br. O envio será confirmado no seu
+                aplicativo de e-mail.
+              </p>
+            </div>
+
+            <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm sm:grid-cols-3">
+              <div>
+                <p className="text-xs font-bold uppercase text-slate-400">
+                  Orçamento
+                </p>
+                <p className="font-semibold text-slate-900">
+                  {orcamentoCancelamento.numero_orcamento}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase text-slate-400">
+                  Solicitante
+                </p>
+                <p className="break-all font-semibold text-slate-900">
+                  {profile?.email || user?.email || 'Usuário não identificado'}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase text-slate-400">
+                  Status atual
+                </p>
+                <p className="font-semibold text-blue-700">Aberto</p>
+              </div>
+            </div>
+
+            <label className="block text-sm font-semibold text-slate-700">
+              Motivo do cancelamento
+              <textarea
+                value={motivoCancelamento}
+                onChange={(event) => {
+                  setMotivoCancelamento(event.target.value);
+                  setErroCancelamento(null);
+                }}
+                rows={5}
+                className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-slate-500"
+                placeholder="Descreva o motivo do cancelamento..."
+              />
+            </label>
+
+            {erroCancelamento ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
+                {erroCancelamento}
+              </div>
+            ) : null}
           </div>
         </Modal>
       ) : null}
