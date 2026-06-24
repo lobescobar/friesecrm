@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useHistoricoCliente } from '../../hooks/useHistoricoCliente';
 import { useAuth } from '../../hooks/useAuth';
 import { HistoricoOrcamento } from '../../types';
@@ -12,6 +12,7 @@ type HistoricoClienteProps = {
   clienteId: string;
   aberto: boolean;
   orcamentoFocoInicial?: string | null;
+  onOrcamentoDetalheChange?: (numeroOrcamento: string | null) => void;
 };
 
 type StatusFiltro = 'todos' | HistoricoOrcamento['status'];
@@ -249,7 +250,8 @@ function ordenarHistorico(
 export default function HistoricoCliente({
   clienteId,
   aberto,
-  orcamentoFocoInicial = null
+  orcamentoFocoInicial = null,
+  onOrcamentoDetalheChange
 }: HistoricoClienteProps) {
   const { historico, loading, error, carregarHistorico } = useHistoricoCliente(
     clienteId,
@@ -294,6 +296,26 @@ export default function HistoricoCliente({
     };
   }, [historicoAgrupado]);
 
+  useEffect(() => {
+    if (!orcamentoFocoInicial) {
+      return;
+    }
+
+    const orcamentoEncontrado = historicoAgrupado.find(
+      (item) => item.numero_orcamento === orcamentoFocoInicial
+    );
+
+    if (!orcamentoEncontrado) {
+      return;
+    }
+
+    setOrcamentoDetalhado((atual) =>
+      atual?.numero_orcamento === orcamentoEncontrado.numero_orcamento
+        ? atual
+        : orcamentoEncontrado
+    );
+  }, [historicoAgrupado, orcamentoFocoInicial]);
+
   const alternarOrdenacao = (coluna: ColunaOrdenacao) => {
     if (colunaOrdenacao === coluna) {
       setDirecaoOrdenacao((direcaoAtual) =>
@@ -314,6 +336,12 @@ export default function HistoricoCliente({
 
   const abrirDetalhes = (item: HistoricoOrcamentoAgrupado) => {
     setOrcamentoDetalhado(item);
+    onOrcamentoDetalheChange?.(item.numero_orcamento);
+  };
+
+  const fecharDetalhes = () => {
+    setOrcamentoDetalhado(null);
+    onOrcamentoDetalheChange?.(null);
   };
 
   const abrirSolicitacaoCancelamento = (item: HistoricoOrcamentoAgrupado) => {
@@ -594,7 +622,6 @@ export default function HistoricoCliente({
                         </button>
                       </th>
                       <th className="px-4 py-3 text-left">Status</th>
-                      <th className="px-4 py-3 text-left">Ação</th>
                     </tr>
                   </thead>
 
@@ -635,20 +662,7 @@ export default function HistoricoCliente({
                               {item.status_descricao}
                             </span>
                           </td>
-                          <td className="px-4 py-3">
-                            {item.status === 'A' ? (
-                              <Button
-                                type="button"
-                                variant="danger"
-                                className="px-3 py-1 text-xs"
-                                onClick={() => abrirSolicitacaoCancelamento(item)}
-                              >
-                                Solicitar cancelamento
-                              </Button>
-                            ) : (
-                              <span className="text-xs text-slate-400">-</span>
-                            )}
-                          </td>
+
                         </tr>
                       );
                     })}
@@ -717,7 +731,7 @@ export default function HistoricoCliente({
                         </div>
                       </div>
 
-                      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                      <div className="mt-3">
                         <Button
                           type="button"
                           variant="secondary"
@@ -726,17 +740,6 @@ export default function HistoricoCliente({
                         >
                           Ver itens do orçamento
                         </Button>
-
-                        {item.status === 'A' ? (
-                          <Button
-                            type="button"
-                            variant="danger"
-                            className="w-full"
-                            onClick={() => abrirSolicitacaoCancelamento(item)}
-                          >
-                            Solicitar cancelamento
-                          </Button>
-                        ) : null}
                       </div>
                     </div>
                   );
@@ -759,7 +762,7 @@ export default function HistoricoCliente({
         <Modal
           title={`Orçamento ${orcamentoDetalhado.numero_orcamento}`}
           subtitle="Itens, descrições e quantidades importados da planilha"
-          onClose={() => setOrcamentoDetalhado(null)}
+          onClose={fecharDetalhes}
           footer={
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
               {orcamentoDetalhado.status === 'A' ? (
@@ -767,7 +770,7 @@ export default function HistoricoCliente({
                   type="button"
                   variant="danger"
                   onClick={() => {
-                    setOrcamentoDetalhado(null);
+                    fecharDetalhes();
                     abrirSolicitacaoCancelamento(orcamentoDetalhado);
                   }}
                 >
@@ -778,7 +781,7 @@ export default function HistoricoCliente({
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => setOrcamentoDetalhado(null)}
+                onClick={fecharDetalhes}
               >
                 Fechar
               </Button>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { supabase } from '../../lib/supabase';
@@ -20,6 +20,7 @@ import ClienteModal from '../../components/crm/ClienteModal';
 import GestaoUsuarios from '../../components/crm/GestaoUsuarios';
 import AlertaOrcamentosAbertos from '../../components/crm/AlertaOrcamentosAbertos';
 import { OrcamentoAbertoResumo } from '../../hooks/useOrcamentosAbertos';
+import type { ClienteModalSecao } from '../../components/crm/cliente-modal/ClienteModalNav';
 
 const MapaClientes = dynamic(() => import('../../components/crm/MapaClientes'), {
   ssr: false,
@@ -30,8 +31,183 @@ const MapaClientes = dynamic(() => import('../../components/crm/MapaClientes'), 
   )
 });
 
+const secoesCliente: ClienteModalSecao[] = [
+  'dados',
+  'contatos',
+  'historico',
+  'mapa',
+  'observacoes'
+];
+
+const CHAVE_NAVEGACAO_CRM = 'friese-crm:navegacao-atual';
+
+type EstadoNavegacaoCRM = {
+  cliente: string | null;
+  aba: ClienteModalSecao;
+  orcamento: string | null;
+};
+
+type AtualizacaoParametros = {
+  cliente?: string | null;
+  aba?: ClienteModalSecao | null;
+  orcamento?: string | null;
+};
+
+const navegacaoInicialPadrao: EstadoNavegacaoCRM = {
+  cliente: null,
+  aba: 'dados',
+  orcamento: null
+};
+
+function normalizarSecaoCliente(valor: string | null): ClienteModalSecao {
+  if (secoesCliente.includes(valor as ClienteModalSecao)) {
+    return valor as ClienteModalSecao;
+  }
+
+  return 'dados';
+}
+
+function normalizarNavegacao(
+  navegacao: Partial<EstadoNavegacaoCRM> | null | undefined
+): EstadoNavegacaoCRM {
+  return {
+    cliente: navegacao?.cliente || null,
+    aba: normalizarSecaoCliente(navegacao?.aba || null),
+    orcamento: navegacao?.orcamento || null
+  };
+}
+
+function lerNavegacaoDaUrl(): EstadoNavegacaoCRM {
+  if (typeof window === 'undefined') {
+    return navegacaoInicialPadrao;
+  }
+
+  const parametros = new URLSearchParams(window.location.search);
+
+  return normalizarNavegacao({
+    cliente: parametros.get('cliente'),
+    aba: normalizarSecaoCliente(parametros.get('aba')),
+    orcamento: parametros.get('orcamento')
+  });
+}
+
+function lerNavegacaoSalva(): EstadoNavegacaoCRM {
+  if (typeof window === 'undefined') {
+    return navegacaoInicialPadrao;
+  }
+
+  try {
+    const valorSalvo = window.sessionStorage.getItem(CHAVE_NAVEGACAO_CRM);
+
+    if (!valorSalvo) {
+      return navegacaoInicialPadrao;
+    }
+
+    const dados = JSON.parse(valorSalvo) as Partial<EstadoNavegacaoCRM>;
+    return normalizarNavegacao(dados);
+  } catch (erro) {
+    console.warn('Não foi possível ler navegação salva do CRM:', erro);
+    return navegacaoInicialPadrao;
+  }
+}
+
+function salvarNavegacao(navegacao: EstadoNavegacaoCRM) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  if (!navegacao.cliente) {
+    window.sessionStorage.removeItem(CHAVE_NAVEGACAO_CRM);
+    return;
+  }
+
+  window.sessionStorage.setItem(CHAVE_NAVEGACAO_CRM, JSON.stringify(navegacao));
+}
+
+function limparNavegacaoSalva() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.sessionStorage.removeItem(CHAVE_NAVEGACAO_CRM);
+}
+
+function temParametrosDeNavegacaoNaUrl() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const parametros = new URLSearchParams(window.location.search);
+
+  return (
+    parametros.has('cliente') ||
+    parametros.has('aba') ||
+    parametros.has('orcamento')
+  );
+}
+
+function lerNavegacaoInicial(): EstadoNavegacaoCRM {
+  if (typeof window === 'undefined') {
+    return navegacaoInicialPadrao;
+  }
+
+  const navegacaoUrl = lerNavegacaoDaUrl();
+
+  if (navegacaoUrl.cliente || temParametrosDeNavegacaoNaUrl()) {
+    return navegacaoUrl;
+  }
+
+  const navegacaoSalva = lerNavegacaoSalva();
+
+  if (navegacaoSalva.cliente) {
+    return navegacaoSalva;
+  }
+
+  return navegacaoInicialPadrao;
+}
+
+function escreverNavegacaoNaUrl(navegacao: EstadoNavegacaoCRM) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const parametrosAtuais = new URLSearchParams(window.location.search);
+
+  if (navegacao.cliente) {
+    parametrosAtuais.set('cliente', navegacao.cliente);
+    parametrosAtuais.set('aba', navegacao.aba);
+
+    if (navegacao.orcamento) {
+      parametrosAtuais.set('orcamento', navegacao.orcamento);
+    } else {
+      parametrosAtuais.delete('orcamento');
+    }
+  } else {
+    parametrosAtuais.delete('cliente');
+    parametrosAtuais.delete('aba');
+    parametrosAtuais.delete('orcamento');
+  }
+
+  const query = parametrosAtuais.toString();
+  const destino = query
+    ? `${window.location.pathname}?${query}`
+    : window.location.pathname;
+  const atual = `${window.location.pathname}${window.location.search}`;
+
+  if (destino !== atual) {
+    window.history.replaceState(null, '', destino);
+  }
+}
+
 function CRMContent() {
   const router = useRouter();
+  const [navegacaoCRM, setNavegacaoCRM] =
+    useState<EstadoNavegacaoCRM>(lerNavegacaoInicial);
+
+  const clienteParametro = navegacaoCRM.cliente;
+  const secaoParametro = navegacaoCRM.aba;
+  const orcamentoParametro = navegacaoCRM.orcamento;
+
   const { user, profile, loading: verificandoLogin, error: erroAuth, isAdmin } = useAuth();
   const {
     clientes,
@@ -76,6 +252,32 @@ function CRMContent() {
     error: erroContatos
   } = useContatos();
 
+  const atualizarParametrosNavegacao = useCallback(
+    (atualizacoes: AtualizacaoParametros) => {
+      const navegacaoAtual = lerNavegacaoDaUrl();
+
+      const proximaNavegacao = normalizarNavegacao({
+        cliente:
+          atualizacoes.cliente !== undefined
+            ? atualizacoes.cliente
+            : navegacaoAtual.cliente,
+        aba:
+          atualizacoes.aba !== undefined
+            ? atualizacoes.aba || 'dados'
+            : navegacaoAtual.aba,
+        orcamento:
+          atualizacoes.orcamento !== undefined
+            ? atualizacoes.orcamento
+            : navegacaoAtual.orcamento
+      });
+
+      escreverNavegacaoNaUrl(proximaNavegacao);
+      salvarNavegacao(proximaNavegacao);
+      setNavegacaoCRM(proximaNavegacao);
+    },
+    []
+  );
+
   useEffect(() => {
     if (!verificandoLogin && !profile) {
       router.push('/login');
@@ -88,7 +290,82 @@ function CRMContent() {
     }
   }, [clienteSelecionado?.id, carregarContatos]);
 
+  useEffect(() => {
+    const sincronizarNavegacaoSalva = () => {
+      const navegacaoUrl = lerNavegacaoDaUrl();
+
+      if (navegacaoUrl.cliente || temParametrosDeNavegacaoNaUrl()) {
+        setNavegacaoCRM(navegacaoUrl);
+        salvarNavegacao(navegacaoUrl);
+        return;
+      }
+
+      const navegacaoSalva = lerNavegacaoSalva();
+
+      if (navegacaoSalva.cliente) {
+        escreverNavegacaoNaUrl(navegacaoSalva);
+        setNavegacaoCRM(navegacaoSalva);
+      }
+    };
+
+    const aoMudarVisibilidade = () => {
+      if (!document.hidden) {
+        sincronizarNavegacaoSalva();
+      }
+    };
+
+    window.addEventListener('focus', sincronizarNavegacaoSalva);
+    window.addEventListener('pageshow', sincronizarNavegacaoSalva);
+    document.addEventListener('visibilitychange', aoMudarVisibilidade);
+
+    return () => {
+      window.removeEventListener('focus', sincronizarNavegacaoSalva);
+      window.removeEventListener('pageshow', sincronizarNavegacaoSalva);
+      document.removeEventListener('visibilitychange', aoMudarVisibilidade);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (carregandoClientes) {
+      return;
+    }
+
+    if (!clienteParametro) {
+      setClienteSelecionado(null);
+      setHistoricoInicialAberto(false);
+      setOrcamentoHistoricoFoco(null);
+      return;
+    }
+
+    const clienteEncontrado = clientes.find(
+      (cliente) => cliente.id === clienteParametro
+    );
+
+    if (!clienteEncontrado) {
+      limparNavegacaoSalva();
+      escreverNavegacaoNaUrl(navegacaoInicialPadrao);
+      setNavegacaoCRM(navegacaoInicialPadrao);
+      setClienteSelecionado(null);
+      setHistoricoInicialAberto(false);
+      setOrcamentoHistoricoFoco(null);
+      return;
+    }
+
+    setClienteSelecionado(clienteEncontrado);
+    setHistoricoInicialAberto(
+      secaoParametro === 'historico' || Boolean(orcamentoParametro)
+    );
+    setOrcamentoHistoricoFoco(orcamentoParametro);
+  }, [
+    carregandoClientes,
+    clientes,
+    clienteParametro,
+    secaoParametro,
+    orcamentoParametro
+  ]);
+
   const sair = async () => {
+    limparNavegacaoSalva();
     await supabase.auth.signOut();
     router.push('/login');
   };
@@ -112,6 +389,11 @@ function CRMContent() {
     setHistoricoInicialAberto(false);
     setOrcamentoHistoricoFoco(null);
     setClienteSelecionado(cliente);
+    atualizarParametrosNavegacao({
+      cliente: cliente.id,
+      aba: 'dados',
+      orcamento: null
+    });
   };
 
   const abrirHistoricoPorOrcamentoAberto = (orcamento: OrcamentoAbertoResumo) => {
@@ -128,12 +410,46 @@ function CRMContent() {
     setHistoricoInicialAberto(true);
     setOrcamentoHistoricoFoco(orcamento.numero_orcamento);
     setClienteSelecionado(cliente);
+    atualizarParametrosNavegacao({
+      cliente: cliente.id,
+      aba: 'historico',
+      orcamento: orcamento.numero_orcamento
+    });
+  };
+
+  const alterarSecaoCliente = (secao: ClienteModalSecao) => {
+    setHistoricoInicialAberto(secao === 'historico');
+
+    if (secao !== 'historico') {
+      setOrcamentoHistoricoFoco(null);
+    }
+
+    atualizarParametrosNavegacao({
+      aba: secao,
+      orcamento: secao === 'historico' ? orcamentoHistoricoFoco : null
+    });
+  };
+
+  const alterarOrcamentoHistorico = (numeroOrcamento: string | null) => {
+    setHistoricoInicialAberto(true);
+    setOrcamentoHistoricoFoco(numeroOrcamento);
+
+    atualizarParametrosNavegacao({
+      aba: 'historico',
+      orcamento: numeroOrcamento
+    });
   };
 
   const fecharClienteSelecionado = () => {
     setClienteSelecionado(null);
     setHistoricoInicialAberto(false);
     setOrcamentoHistoricoFoco(null);
+    limparNavegacaoSalva();
+    atualizarParametrosNavegacao({
+      cliente: null,
+      aba: null,
+      orcamento: null
+    });
   };
 
   if (verificandoLogin) {
@@ -251,13 +567,16 @@ function CRMContent() {
 
       {clienteSelecionado ? (
         <ClienteModal
-          key={`${clienteSelecionado.id}-${historicoInicialAberto ? 'historico' : 'dados'}-${orcamentoHistoricoFoco || 'sem-foco'}`}
+          key={clienteSelecionado.id}
           cliente={clienteSelecionado}
           contatos={contatos}
           carregandoContatos={carregandoContatos}
           erroContatos={erroContatos}
           historicoInicialAberto={historicoInicialAberto}
           orcamentoHistoricoFoco={orcamentoHistoricoFoco}
+          secaoInicial={secaoParametro}
+          onSecaoChange={alterarSecaoCliente}
+          onOrcamentoHistoricoChange={alterarOrcamentoHistorico}
           onClose={fecharClienteSelecionado}
           onAtualizarCliente={atualizarClienteSelecionado}
           onAdicionarContato={adicionarContato}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Cliente, Contato } from '../../types';
 import { montarEnderecoCompleto } from '../../utils/formatters';
 import Button from '../ui/Button';
@@ -20,6 +20,9 @@ type ClienteModalProps = {
   erroContatos?: string | null;
   historicoInicialAberto?: boolean;
   orcamentoHistoricoFoco?: string | null;
+  secaoInicial?: ClienteModalSecao;
+  onSecaoChange?: (secao: ClienteModalSecao) => void;
+  onOrcamentoHistoricoChange?: (numeroOrcamento: string | null) => void;
   onClose: () => void;
   onAtualizarCliente: (id: string, dados: Partial<Cliente>) => Promise<Cliente>;
   onAdicionarContato: (contato: {
@@ -52,6 +55,9 @@ export default function ClienteModal({
   erroContatos,
   historicoInicialAberto = false,
   orcamentoHistoricoFoco = null,
+  secaoInicial,
+  onSecaoChange,
+  onOrcamentoHistoricoChange,
   onClose,
   onAtualizarCliente,
   onAdicionarContato,
@@ -62,8 +68,14 @@ export default function ClienteModal({
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState<string | null>(null);
   const [secaoAtiva, setSecaoAtiva] = useState<ClienteModalSecao>(
-    historicoInicialAberto ? 'historico' : 'dados'
+    secaoInicial || (historicoInicialAberto ? 'historico' : 'dados')
   );
+
+  useEffect(() => {
+    if (secaoInicial && secaoInicial !== secaoAtiva) {
+      setSecaoAtiva(secaoInicial);
+    }
+  }, [secaoInicial, secaoAtiva]);
 
   const alterado = observacoes !== (cliente.observacoes || '');
 
@@ -72,6 +84,11 @@ export default function ClienteModal({
     cidade: cliente.cidade,
     estado: cliente.estado
   });
+
+  const alterarSecaoAtiva = (secao: ClienteModalSecao) => {
+    setSecaoAtiva(secao);
+    onSecaoChange?.(secao);
+  };
 
   const salvar = async () => {
     setSalvando(true);
@@ -125,6 +142,7 @@ export default function ClienteModal({
           clienteId={cliente.id}
           aberto
           orcamentoFocoInicial={orcamentoHistoricoFoco}
+          onOrcamentoDetalheChange={onOrcamentoHistoricoChange}
         />
       );
     }
@@ -215,7 +233,7 @@ export default function ClienteModal({
       }
     >
       <div className="grid min-h-[520px] gap-4 lg:grid-cols-[220px_1fr]">
-        <ClienteModalNav secaoAtiva={secaoAtiva} onChange={setSecaoAtiva} />
+        <ClienteModalNav secaoAtiva={secaoAtiva} onChange={alterarSecaoAtiva} />
 
         <div className="min-w-0 rounded-3xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4 lg:max-h-[68vh] lg:overflow-y-auto">
           {renderizarConteudo()}
