@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Cliente, Ordenacao, Profile } from '../types';
 import { normalizarTexto, somenteNumeros } from '../utils/formatters';
+import { CACHE_TTL_MEDIO_MS, lerCacheSessao, salvarCacheSessao } from '../utils/sessionCache';
 
 function valorOrdenacao(cliente: Cliente, coluna: keyof Cliente | 'cliente_nome') {
   if (coluna === 'cliente_nome') {
@@ -11,19 +12,67 @@ function valorOrdenacao(cliente: Cliente, coluna: keyof Cliente | 'cliente_nome'
   return String(cliente[coluna] ?? '');
 }
 
+function montarChaveCacheClientes(profile: Profile | null) {
+  if (!profile) {
+    return null;
+  }
+
+  const segmentos = [...(profile.segmentos_permitidos || [])]
+    .sort()
+    .join(',');
+  const estados = [...(profile.estados_permitidos || [])].sort().join(',');
+
+  return `clientes:${profile.id}:${profile.role}:${segmentos}:${estados}`;
+}
+
 export function useClientes(profile: Profile | null) {
+  const cacheKey = useMemo(() => montarChaveCacheClientes(profile), [profile]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const clientesRef = useRef<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    clientesRef.current = clientes;
+  }, [clientes]);
+
+  useEffect(() => {
+    if (!cacheKey || clientesRef.current.length > 0) {
+      return;
+    }
+
+    const clientesEmCache = lerCacheSessao<Cliente[]>(
+      cacheKey,
+      CACHE_TTL_MEDIO_MS
+    );
+
+    if (clientesEmCache?.length) {
+      setClientes(clientesEmCache);
+      setLoading(false);
+    }
+  }, [cacheKey]);
+
   const carregarClientes = useCallback(async () => {
-    if (!profile) {
+    if (!profile || !cacheKey) {
       setClientes([]);
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    const clientesEmCache = lerCacheSessao<Cliente[]>(
+      cacheKey,
+      CACHE_TTL_MEDIO_MS
+    );
+
+    if (clientesEmCache?.length && clientesRef.current.length === 0) {
+      setClientes(clientesEmCache);
+      clientesRef.current = clientesEmCache;
+    }
+
+    const possuiDadosEmTela =
+      clientesRef.current.length > 0 || Boolean(clientesEmCache?.length);
+
+    setLoading(!possuiDadosEmTela);
     setError(null);
 
     try {
@@ -65,16 +114,21 @@ export function useClientes(profile: Profile | null) {
       }
 
       setClientes(todos);
+      clientesRef.current = todos;
+      salvarCacheSessao(cacheKey, todos);
     } catch (err) {
       const mensagem =
         err instanceof Error ? err.message : 'Erro ao carregar clientes.';
       console.error('Erro ao carregar clientes:', err);
       setError(mensagem);
-      setClientes([]);
+
+      if (clientesRef.current.length === 0) {
+        setClientes([]);
+      }
     } finally {
       setLoading(false);
     }
-  }, [profile]);
+  }, [profile, cacheKey]);
 
   const atualizarCliente = useCallback(
     async (id: string, dados: Partial<Cliente>) => {
@@ -91,15 +145,23 @@ export function useClientes(profile: Profile | null) {
 
       const clienteAtualizado = data as Cliente;
 
-      setClientes((atuais) =>
-        atuais.map((cliente) =>
+      setClientes((atuais) => {
+        const atualizados = atuais.map((cliente) =>
           cliente.id === id ? { ...cliente, ...clienteAtualizado } : cliente
-        )
-      );
+        );
+
+        clientesRef.current = atualizados;
+
+        if (cacheKey) {
+          salvarCacheSessao(cacheKey, atualizados);
+        }
+
+        return atualizados;
+      });
 
       return clienteAtualizado;
     },
-    []
+    [cacheKey]
   );
 
   useEffect(() => {

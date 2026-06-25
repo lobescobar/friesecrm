@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   OrcamentoAbertoResumo,
   useOrcamentosAbertos
@@ -12,6 +12,14 @@ type AlertaOrcamentosAbertosProps = {
   refreshKey?: number;
   onSelecionarOrcamento?: (orcamento: OrcamentoAbertoResumo) => void;
 };
+
+type CampoOrdenacaoAbertos =
+  | 'data_emissao'
+  | 'numero_orcamento'
+  | 'codigo_cliente_loja'
+  | 'nome_cliente';
+
+type DirecaoOrdenacao = 'asc' | 'desc';
 
 function formatarData(data?: string | null) {
   if (!data) return '-';
@@ -25,17 +33,104 @@ function formatarData(data?: string | null) {
   return data;
 }
 
+function normalizarTexto(valor?: string | null) {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function compararTexto(a?: string | null, b?: string | null) {
+  return String(a || '').localeCompare(String(b || ''), 'pt-BR', {
+    numeric: true,
+    sensitivity: 'base'
+  });
+}
+
+function compararData(a?: string | null, b?: string | null) {
+  const dataA = a ? new Date(`${a}T00:00:00`).getTime() : 0;
+  const dataB = b ? new Date(`${b}T00:00:00`).getTime() : 0;
+
+  return dataA - dataB;
+}
+
+function ordenarOrcamentosAbertos(
+  orcamentos: OrcamentoAbertoResumo[],
+  campo: CampoOrdenacaoAbertos,
+  direcao: DirecaoOrdenacao
+) {
+  const multiplicador = direcao === 'asc' ? 1 : -1;
+
+  return [...orcamentos].sort((a, b) => {
+    let comparacao = 0;
+
+    if (campo === 'data_emissao') {
+      comparacao = compararData(a.data_emissao, b.data_emissao);
+    }
+
+    if (campo === 'numero_orcamento') {
+      comparacao = compararTexto(a.numero_orcamento, b.numero_orcamento);
+    }
+
+    if (campo === 'codigo_cliente_loja') {
+      comparacao = compararTexto(
+        a.codigo_cliente_loja,
+        b.codigo_cliente_loja
+      );
+    }
+
+    if (campo === 'nome_cliente') {
+      comparacao = compararTexto(a.nome_cliente, b.nome_cliente);
+    }
+
+    return comparacao * multiplicador;
+  });
+}
+
 export default function AlertaOrcamentosAbertos({
   refreshKey = 0,
   onSelecionarOrcamento
 }: AlertaOrcamentosAbertosProps) {
   const [modalAberto, setModalAberto] = useState(false);
+  const [busca, setBusca] = useState('');
+  const [ordenarPor, setOrdenarPor] =
+    useState<CampoOrdenacaoAbertos>('data_emissao');
+  const [direcao, setDirecao] = useState<DirecaoOrdenacao>('desc');
+
   const { orcamentos, loading, error, carregarOrcamentosAbertos } =
     useOrcamentosAbertos(refreshKey);
+
+  const orcamentosFiltrados = useMemo(() => {
+    const termoBusca = normalizarTexto(busca);
+
+    const filtrados = termoBusca
+      ? orcamentos.filter((orcamento) => {
+          const textoBusca = normalizarTexto(
+            [
+              orcamento.codigo_cliente_loja,
+              orcamento.nome_cliente,
+              orcamento.numero_orcamento,
+              formatarData(orcamento.data_emissao)
+            ].join(' ')
+          );
+
+          return textoBusca.includes(termoBusca);
+        })
+      : orcamentos;
+
+    return ordenarOrcamentosAbertos(filtrados, ordenarPor, direcao);
+  }, [busca, direcao, orcamentos, ordenarPor]);
 
   const selecionarOrcamento = (orcamento: OrcamentoAbertoResumo) => {
     setModalAberto(false);
     onSelecionarOrcamento?.(orcamento);
+  };
+
+  const limparFiltrosModal = () => {
+    setBusca('');
+    setOrdenarPor('data_emissao');
+    setDirecao('desc');
   };
 
   if (loading && orcamentos.length === 0) {
@@ -118,78 +213,152 @@ export default function AlertaOrcamentosAbertos({
               item por item.
             </div>
 
-            <div className="hidden overflow-hidden rounded-2xl border border-slate-200 md:block">
-              <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3 text-left">Nº Cliente</th>
-                    <th className="px-4 py-3 text-left">Nome</th>
-                    <th className="px-4 py-3 text-left">Nº Orçamento</th>
-                    <th className="px-4 py-3 text-left">Data de emissão</th>
-                    <th className="px-4 py-3 text-left">Ação</th>
-                  </tr>
-                </thead>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.5fr_1fr_1fr_auto] lg:items-end">
+                <label className="block">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Buscar
+                  </span>
+                  <input
+                    type="search"
+                    value={busca}
+                    onChange={(event) => setBusca(event.target.value)}
+                    placeholder="Cliente, código ou orçamento..."
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
 
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {orcamentos.map((orcamento) => (
-                    <LinhaOrcamentoAberto
-                      key={orcamento.chave}
-                      orcamento={orcamento}
-                      onSelecionar={selecionarOrcamento}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                <label className="block">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Ordenar por
+                  </span>
+                  <select
+                    value={ordenarPor}
+                    onChange={(event) =>
+                      setOrdenarPor(event.target.value as CampoOrdenacaoAbertos)
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="data_emissao">Data de emissão</option>
+                    <option value="numero_orcamento">Nº Orçamento</option>
+                    <option value="codigo_cliente_loja">Nº Cliente</option>
+                    <option value="nome_cliente">Nome</option>
+                  </select>
+                </label>
 
-            <div className="space-y-3 md:hidden">
-              {orcamentos.map((orcamento) => (
-                <button
-                  key={orcamento.chave}
+                <label className="block">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Direção
+                  </span>
+                  <select
+                    value={direcao}
+                    onChange={(event) =>
+                      setDirecao(event.target.value as DirecaoOrdenacao)
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="desc">Decrescente</option>
+                    <option value="asc">Crescente</option>
+                  </select>
+                </label>
+
+                <Button
                   type="button"
-                  onClick={() => selecionarOrcamento(orcamento)}
-                  className="block w-full rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-300 hover:bg-blue-50"
+                  variant="secondary"
+                  onClick={limparFiltrosModal}
                 >
-                  <p className="text-xs font-bold uppercase text-slate-400">
-                    Nº Cliente
-                  </p>
-                  <p className="text-sm font-semibold text-slate-800">
-                    {orcamento.codigo_cliente_loja}
-                  </p>
+                  Limpar
+                </Button>
+              </div>
 
-                  <p className="mt-3 text-xs font-bold uppercase text-slate-400">
-                    Nome
-                  </p>
-                  <p className="text-base font-bold text-slate-900">
-                    {orcamento.nome_cliente}
-                  </p>
-
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-xs font-bold uppercase text-slate-400">
-                        Orçamento
-                      </p>
-                      <p className="font-semibold text-slate-800">
-                        {orcamento.numero_orcamento}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs font-bold uppercase text-slate-400">
-                        Emissão
-                      </p>
-                      <p className="font-semibold text-slate-800">
-                        {formatarData(orcamento.data_emissao)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <p className="mt-3 text-sm font-bold text-blue-700">
-                    Abrir histórico do cliente
-                  </p>
-                </button>
-              ))}
+              <p className="mt-3 text-sm text-slate-500">
+                Exibindo <strong>{orcamentosFiltrados.length}</strong> de{' '}
+                <strong>{orcamentos.length}</strong> orçamento(s) em aberto.
+              </p>
             </div>
+
+            {orcamentosFiltrados.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+                Nenhum orçamento em aberto encontrado com os filtros aplicados.
+              </div>
+            ) : null}
+
+            {orcamentosFiltrados.length > 0 ? (
+              <div className="hidden overflow-hidden rounded-2xl border border-slate-200 md:block">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 text-left">Nº Cliente</th>
+                      <th className="px-4 py-3 text-left">Nome</th>
+                      <th className="px-4 py-3 text-left">Nº Orçamento</th>
+                      <th className="px-4 py-3 text-left">Data de emissão</th>
+                      <th className="px-4 py-3 text-left">Ação</th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {orcamentosFiltrados.map((orcamento) => (
+                      <LinhaOrcamentoAberto
+                        key={orcamento.chave}
+                        orcamento={orcamento}
+                        onSelecionar={selecionarOrcamento}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+
+            {orcamentosFiltrados.length > 0 ? (
+              <div className="space-y-3 md:hidden">
+                {orcamentosFiltrados.map((orcamento) => (
+                  <button
+                    key={orcamento.chave}
+                    type="button"
+                    onClick={() => selecionarOrcamento(orcamento)}
+                    className="block w-full rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-300 hover:bg-blue-50"
+                  >
+                    <p className="text-xs font-bold uppercase text-slate-400">
+                      Nº Cliente
+                    </p>
+                    <p className="text-sm font-semibold text-slate-800">
+                      {orcamento.codigo_cliente_loja}
+                    </p>
+
+                    <p className="mt-3 text-xs font-bold uppercase text-slate-400">
+                      Nome
+                    </p>
+                    <p className="text-base font-bold text-slate-900">
+                      {orcamento.nome_cliente}
+                    </p>
+
+                    <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-xs font-bold uppercase text-slate-400">
+                          Orçamento
+                        </p>
+                        <p className="font-semibold text-slate-800">
+                          {orcamento.numero_orcamento}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-bold uppercase text-slate-400">
+                          Emissão
+                        </p>
+                        <p className="font-semibold text-slate-800">
+                          {formatarData(orcamento.data_emissao)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="mt-3 text-sm font-bold text-blue-700">
+                      Abrir histórico do cliente
+                    </p>
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         </Modal>
       ) : null}

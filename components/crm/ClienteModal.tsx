@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Cliente, Contato } from '../../types';
 import { montarEnderecoCompleto } from '../../utils/formatters';
 import Button from '../ui/Button';
@@ -70,12 +70,51 @@ export default function ClienteModal({
   const [secaoAtiva, setSecaoAtiva] = useState<ClienteModalSecao>(
     secaoInicial || (historicoInicialAberto ? 'historico' : 'dados')
   );
+  const conteudoRef = useRef<HTMLDivElement>(null);
+  const chaveScrollConteudo = useMemo(
+    () => `cliente:${cliente.id}:secao:${secaoAtiva}`,
+    [cliente.id, secaoAtiva]
+  );
 
   useEffect(() => {
     if (secaoInicial && secaoInicial !== secaoAtiva) {
       setSecaoAtiva(secaoInicial);
     }
   }, [secaoInicial, secaoAtiva]);
+
+  useEffect(() => {
+    const elemento = conteudoRef.current;
+
+    if (!elemento || typeof window === 'undefined') {
+      return;
+    }
+
+    const valorSalvo = window.sessionStorage.getItem(
+      `friese-crm:scroll:${chaveScrollConteudo}`
+    );
+    const scrollTop = Number(valorSalvo);
+
+    window.setTimeout(() => {
+      if (Number.isFinite(scrollTop) && scrollTop > 0) {
+        elemento.scrollTop = scrollTop;
+      } else {
+        elemento.scrollTop = 0;
+      }
+    }, 0);
+  }, [chaveScrollConteudo]);
+
+  const salvarScrollConteudo = () => {
+    const elemento = conteudoRef.current;
+
+    if (!elemento || typeof window === 'undefined') {
+      return;
+    }
+
+    window.sessionStorage.setItem(
+      `friese-crm:scroll:${chaveScrollConteudo}`,
+      String(elemento.scrollTop)
+    );
+  };
 
   const alterado = observacoes !== (cliente.observacoes || '');
 
@@ -206,6 +245,7 @@ export default function ClienteModal({
     <Modal
       title={obterNomePrincipal(cliente)}
       onClose={onClose}
+      scrollKey={`cliente:${cliente.id}:modal`}
       bloquearFechamento={alterado && !salvando}
       footer={
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -235,7 +275,11 @@ export default function ClienteModal({
       <div className="grid min-h-[520px] gap-4 lg:grid-cols-[220px_1fr]">
         <ClienteModalNav secaoAtiva={secaoAtiva} onChange={alterarSecaoAtiva} />
 
-        <div className="min-w-0 rounded-3xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4 lg:max-h-[68vh] lg:overflow-y-auto">
+        <div
+          ref={conteudoRef}
+          className="min-w-0 rounded-3xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4 lg:max-h-[68vh] lg:overflow-y-auto"
+          onScroll={salvarScrollConteudo}
+        >
           {renderizarConteudo()}
         </div>
       </div>

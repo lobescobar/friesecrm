@@ -1,6 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { HistoricoOrcamento } from '../types';
+import {
+  CACHE_TTL_CURTO_MS,
+  lerCacheSessao,
+  salvarCacheSessao
+} from '../utils/sessionCache';
 
 function calcularDataLimite36Meses() {
   const data = new Date();
@@ -21,17 +26,65 @@ const estadoInicial: EstadoHistoricoCliente = {
 };
 
 export function useHistoricoCliente(clienteId?: string | null, ativo = true) {
+  const cacheKey = useMemo(
+    () => (clienteId ? `historico-cliente:${clienteId}` : null),
+    [clienteId]
+  );
   const [estado, setEstado] = useState<EstadoHistoricoCliente>(estadoInicial);
+  const historicoRef = useRef<HistoricoOrcamento[]>([]);
 
-  const carregarHistorico = useCallback(async () => {
-    if (!clienteId || !ativo) {
-      setEstado(estadoInicial);
+  useEffect(() => {
+    historicoRef.current = estado.historico;
+  }, [estado.historico]);
+
+  useEffect(() => {
+    if (!cacheKey || historicoRef.current.length > 0) {
       return;
     }
 
+    const historicoEmCache = lerCacheSessao<HistoricoOrcamento[]>(
+      cacheKey,
+      CACHE_TTL_CURTO_MS
+    );
+
+    if (historicoEmCache) {
+      setEstado({
+        historico: historicoEmCache,
+        loading: false,
+        error: null
+      });
+    }
+  }, [cacheKey]);
+
+  const carregarHistorico = useCallback(async () => {
+    if (!clienteId || !ativo || !cacheKey) {
+      if (!clienteId) {
+        setEstado(estadoInicial);
+      }
+
+      return;
+    }
+
+    const historicoEmCache = lerCacheSessao<HistoricoOrcamento[]>(
+      cacheKey,
+      CACHE_TTL_CURTO_MS
+    );
+
+    if (historicoEmCache && historicoRef.current.length === 0) {
+      historicoRef.current = historicoEmCache;
+      setEstado({
+        historico: historicoEmCache,
+        loading: false,
+        error: null
+      });
+    }
+
+    const possuiDadosEmTela =
+      historicoRef.current.length > 0 || Boolean(historicoEmCache);
+
     setEstado((estadoAtual) => ({
       ...estadoAtual,
-      loading: true,
+      loading: !possuiDadosEmTela,
       error: null
     }));
 
@@ -50,8 +103,13 @@ export function useHistoricoCliente(clienteId?: string | null, ativo = true) {
         throw erroBusca;
       }
 
+      const historicoAtualizado = (data || []) as HistoricoOrcamento[];
+
+      historicoRef.current = historicoAtualizado;
+      salvarCacheSessao(cacheKey, historicoAtualizado);
+
       setEstado({
-        historico: (data || []) as HistoricoOrcamento[],
+        historico: historicoAtualizado,
         loading: false,
         error: null
       });
@@ -63,13 +121,13 @@ export function useHistoricoCliente(clienteId?: string | null, ativo = true) {
 
       console.error('Erro ao carregar histórico do cliente:', err);
 
-      setEstado({
-        historico: [],
+      setEstado((estadoAtual) => ({
+        historico: estadoAtual.historico,
         loading: false,
         error: mensagem
-      });
+      }));
     }
-  }, [clienteId, ativo]);
+  }, [clienteId, ativo, cacheKey]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {

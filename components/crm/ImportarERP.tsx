@@ -233,7 +233,7 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
       { campo: 'Segmento', origem: 'Coluna EK / valores oficiais' },
       {
         campo: 'Cidade',
-        origem: 'Coluna J'
+        origem: 'Coluna J / Municipio'
       },
       {
         campo: 'Estado',
@@ -401,19 +401,13 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
         if (!cnpj) novoResumo.semCnpj++;
 
         // Regra oficial do ERP Friese:
-        // Cidade deve vir da coluna J da planilha de cadastro de clientes.
-        // A coluna I costuma conter o código do município e não deve preencher o campo cidade.
-        const cidadeJ = texto(linha[9]);
+        // Cidade deve vir obrigatoriamente da coluna J da planilha de cadastro de clientes.
+        // A coluna I é "Cd.Municipio" e contém apenas o código numérico do município.
+        // Por isso NÃO usamos busca por cabeçalho "Municipio" aqui, pois ela pode capturar a coluna I.
+        const cidade = valorCelula('J');
 
-        const cidade =
-          cidadeJ ||
-          porCabecalho(linha, cabecalho, [
-            'Cidade',
-            'Municipio',
-            'Município'
-          ]);
-
-        const estado = porCabecalho(linha, cabecalho, ['Estado', 'UF']);
+        // Estado vem da coluna H da planilha de cadastro de clientes.
+        const estado = valorCelula('H') || porCabecalho(linha, cabecalho, ['Estado', 'UF']);
 
         const endereco = porCabecalho(linha, cabecalho, [
           'Endereco',

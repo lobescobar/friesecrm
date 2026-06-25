@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useHistoricoCliente } from '../../hooks/useHistoricoCliente';
 import { useAuth } from '../../hooks/useAuth';
 import { HistoricoOrcamento } from '../../types';
@@ -272,6 +272,13 @@ export default function HistoricoCliente({
   const [mensagemCancelamento, setMensagemCancelamento] = useState<string | null>(
     null
   );
+  const orcamentoDetalhadoRef =
+    useRef<HistoricoOrcamentoAgrupado | null>(null);
+  const historicoAgrupadoRef =
+    useRef<HistoricoOrcamentoAgrupado[]>([]);
+  const orcamentoFocoInicialRef = useRef<string | null>(
+    orcamentoFocoInicial
+  );
 
   const historicoAgrupado = useMemo(
     () => agruparPorNumeroPrincipal(historico),
@@ -286,6 +293,18 @@ export default function HistoricoCliente({
 
     return ordenarHistorico(filtrado, colunaOrdenacao, direcaoOrdenacao);
   }, [historicoAgrupado, statusFiltro, colunaOrdenacao, direcaoOrdenacao]);
+
+  useEffect(() => {
+    historicoAgrupadoRef.current = historicoAgrupado;
+  }, [historicoAgrupado]);
+
+  useEffect(() => {
+    orcamentoDetalhadoRef.current = orcamentoDetalhado;
+  }, [orcamentoDetalhado]);
+
+  useEffect(() => {
+    orcamentoFocoInicialRef.current = orcamentoFocoInicial;
+  }, [orcamentoFocoInicial]);
 
   const resumo = useMemo(() => {
     return {
@@ -315,6 +334,52 @@ export default function HistoricoCliente({
         : orcamentoEncontrado
     );
   }, [historicoAgrupado, orcamentoFocoInicial]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const restaurarDetalheDoOrcamento = () => {
+      if (typeof document !== 'undefined' && document.hidden) {
+        return;
+      }
+
+      const numeroOrcamento = orcamentoFocoInicialRef.current;
+
+      if (!numeroOrcamento || orcamentoDetalhadoRef.current) {
+        return;
+      }
+
+      const orcamentoEncontrado = historicoAgrupadoRef.current.find(
+        (item) => item.numero_orcamento === numeroOrcamento
+      );
+
+      if (orcamentoEncontrado) {
+        setOrcamentoDetalhado(orcamentoEncontrado);
+      }
+    };
+
+    const aoVoltarParaPagina = () => {
+      window.setTimeout(restaurarDetalheDoOrcamento, 0);
+    };
+
+    const aoMudarVisibilidade = () => {
+      if (!document.hidden) {
+        aoVoltarParaPagina();
+      }
+    };
+
+    window.addEventListener('focus', aoVoltarParaPagina);
+    window.addEventListener('pageshow', aoVoltarParaPagina);
+    document.addEventListener('visibilitychange', aoMudarVisibilidade);
+
+    return () => {
+      window.removeEventListener('focus', aoVoltarParaPagina);
+      window.removeEventListener('pageshow', aoVoltarParaPagina);
+      document.removeEventListener('visibilitychange', aoMudarVisibilidade);
+    };
+  }, []);
 
   const alternarOrdenacao = (coluna: ColunaOrdenacao) => {
     if (colunaOrdenacao === coluna) {
@@ -763,6 +828,7 @@ export default function HistoricoCliente({
           title={`Orçamento ${orcamentoDetalhado.numero_orcamento}`}
           subtitle="Itens, descrições e quantidades importados da planilha"
           onClose={fecharDetalhes}
+          scrollKey={`orcamento:${clienteId}:${orcamentoDetalhado.numero_orcamento}`}
           footer={
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
               {orcamentoDetalhado.status === 'A' ? (
@@ -897,6 +963,7 @@ export default function HistoricoCliente({
           title={`Solicitar cancelamento do orçamento ${orcamentoCancelamento.numero_orcamento}`}
           subtitle="O CRM abrirá um e-mail pronto para envio ao time de vendas."
           onClose={fecharSolicitacaoCancelamento}
+          scrollKey={`cancelamento:${clienteId}:${orcamentoCancelamento.numero_orcamento}`}
           footer={
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
               <Button

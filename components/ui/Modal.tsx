@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef } from 'react';
+import { ReactNode, useEffect, useMemo, useRef } from 'react';
 
 type ModalProps = {
   title: string;
@@ -7,7 +7,30 @@ type ModalProps = {
   footer?: ReactNode;
   onClose: () => void;
   bloquearFechamento?: boolean;
+  scrollKey?: string;
 };
+
+function lerScrollSalvo(scrollKey?: string) {
+  if (!scrollKey || typeof window === 'undefined') {
+    return 0;
+  }
+
+  const valor = window.sessionStorage.getItem(`friese-crm:scroll:${scrollKey}`);
+  const numero = Number(valor);
+
+  return Number.isFinite(numero) && numero > 0 ? numero : 0;
+}
+
+function salvarScroll(scrollKey: string | undefined, scrollTop: number) {
+  if (!scrollKey || typeof window === 'undefined') {
+    return;
+  }
+
+  window.sessionStorage.setItem(
+    `friese-crm:scroll:${scrollKey}`,
+    String(scrollTop)
+  );
+}
 
 export default function Modal({
   title,
@@ -15,26 +38,95 @@ export default function Modal({
   children,
   footer,
   onClose,
-  bloquearFechamento = false
+  bloquearFechamento = false,
+  scrollKey
 }: ModalProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const conteudoRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  const chaveScroll = useMemo(() => scrollKey, [scrollKey]);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     closeButtonRef.current?.focus();
+  }, []);
 
+  useEffect(() => {
+    if (!chaveScroll) {
+      return undefined;
+    }
+
+    const restaurarScroll = () => {
+      window.setTimeout(() => {
+        const elemento = conteudoRef.current;
+
+        if (!elemento) {
+          return;
+        }
+
+        elemento.scrollTop = lerScrollSalvo(chaveScroll);
+      }, 0);
+    };
+
+    restaurarScroll();
+
+    window.addEventListener('pageshow', restaurarScroll);
+    window.addEventListener('focus', restaurarScroll);
+
+    return () => {
+      window.removeEventListener('pageshow', restaurarScroll);
+      window.removeEventListener('focus', restaurarScroll);
+    };
+  }, [chaveScroll]);
+
+  useEffect(() => {
+    if (!chaveScroll) {
+      return undefined;
+    }
+
+    const salvarScrollAtual = () => {
+      const elemento = conteudoRef.current;
+
+      if (elemento) {
+        salvarScroll(chaveScroll, elemento.scrollTop);
+      }
+    };
+
+    window.addEventListener('blur', salvarScrollAtual);
+    window.addEventListener('pagehide', salvarScrollAtual);
+
+    const aoMudarVisibilidade = () => {
+      if (document.hidden) {
+        salvarScrollAtual();
+      }
+    };
+
+    document.addEventListener('visibilitychange', aoMudarVisibilidade);
+
+    return () => {
+      window.removeEventListener('blur', salvarScrollAtual);
+      window.removeEventListener('pagehide', salvarScrollAtual);
+      document.removeEventListener('visibilitychange', aoMudarVisibilidade);
+    };
+  }, [chaveScroll]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !bloquearFechamento) {
-        onClose();
+        onCloseRef.current();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [bloquearFechamento, onClose]);
+  }, [bloquearFechamento]);
 
   const tentarFechar = () => {
     if (!bloquearFechamento) {
-      onClose();
+      onCloseRef.current();
       return;
     }
 
@@ -43,7 +135,15 @@ export default function Modal({
     );
 
     if (confirmar) {
-      onClose();
+      onCloseRef.current();
+    }
+  };
+
+  const salvarScrollDoConteudo = () => {
+    const elemento = conteudoRef.current;
+
+    if (elemento) {
+      salvarScroll(chaveScroll, elemento.scrollTop);
     }
   };
 
@@ -81,7 +181,13 @@ export default function Modal({
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6">{children}</div>
+        <div
+          ref={conteudoRef}
+          className="flex-1 overflow-y-auto p-6"
+          onScroll={salvarScrollDoConteudo}
+        >
+          {children}
+        </div>
 
         {footer ? (
           <footer className="border-t border-slate-100 bg-white px-6 py-4">

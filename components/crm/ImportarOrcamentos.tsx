@@ -71,6 +71,21 @@ type IndicesPlanilha = {
   dataFechamento: number;
 };
 
+const INDICE_CABECALHO_ORCAMENTOS_PADRAO = 3;
+
+const INDICES_ORCAMENTOS_FIXOS: IndicesPlanilha = {
+  numeroIt: 0, // Coluna A — Numero It
+  cliente: 1, // Coluna B — Cliente
+  loja: 2, // Coluna C — Loja
+  descricao: 5, // Coluna F — Descricao
+  quantidade: 6, // Coluna G — Quantidade
+  status: 9, // Coluna J — Status
+  pedidoVenda: 11, // Coluna L — Pedido Venda
+  dataFechamento: 12, // Coluna M — Fechamento
+  dataEmissao: 13 // Coluna N — DT Emissao
+};
+
+
 const resumoInicial: ResumoOrcamentos = {
   totalLinhasLidas: 0,
   cabecalhosIgnorados: 0,
@@ -97,6 +112,9 @@ const normalizarTexto = (valor: string) =>
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim();
+
+const normalizarChaveCabecalho = (valor: unknown) =>
+  normalizarTexto(texto(valor)).replace(/[^a-z0-9]/g, '');
 
 const somenteNumeros = (valor: string) => valor.replace(/\D/g, '');
 
@@ -161,14 +179,11 @@ async function atualizarStatusClientesEmLotes(
   clienteIds: string[],
   status: 'Ativo' | 'Inativo'
 ) {
-  const atualizadoEm = new Date().toISOString();
-
   for (const lote of lotes(clienteIds, 500)) {
     const { error } = await supabase
       .from('clientes')
       .update({
-        status,
-        updated_at: atualizadoEm
+        status
       })
       .in('id', lote);
 
@@ -181,13 +196,11 @@ async function atualizarStatusClientesEmLotes(
 async function recalcularStatusClientesPorHistorico() {
   const dataLimite = calcularDataLimiteStatusCliente();
   const clientesAtivos = await buscarClientesComOrcamentoRecente(dataLimite);
-  const atualizadoEm = new Date().toISOString();
 
   const { error: erroInativos } = await supabase
     .from('clientes')
     .update({
-      status: 'Inativo',
-      updated_at: atualizadoEm
+      status: 'Inativo'
     })
     .not('id', 'is', null);
 
@@ -317,25 +330,52 @@ function converterNumeroParaBanco(valor: unknown) {
 
 function acharIndice(headers: unknown[], nomesPossiveis: string[]) {
   const headersNormalizados = headers.map((header) => normalizarTexto(texto(header)));
+  const headersChave = headers.map(normalizarChaveCabecalho);
   const nomesNormalizados = nomesPossiveis.map(normalizarTexto);
+  const nomesChave = nomesPossiveis.map(normalizarChaveCabecalho);
 
-  return headersNormalizados.findIndex((header) =>
-    nomesNormalizados.some((nome) => header === nome || header.includes(nome))
-  );
+  return headersNormalizados.findIndex((header, indice) => {
+    const chaveHeader = headersChave[indice];
+
+    return (
+      nomesNormalizados.some((nome) => header === nome || header.includes(nome)) ||
+      nomesChave.some(
+        (nome) =>
+          chaveHeader === nome ||
+          chaveHeader.includes(nome) ||
+          nome.includes(chaveHeader)
+      )
+    );
+  });
 }
 
 function encontrarCabecalho(rows: unknown[][]) {
   for (let indice = 0; indice < rows.length; indice += 1) {
-    const linha = rows[indice].map((celula) => normalizarTexto(texto(celula)));
-    const temNumeroIt = linha.some((celula) => celula === 'numero it');
-    const temCliente = linha.some((celula) => celula === 'cliente');
-    const temDataEmissao = linha.some(
-      (celula) => celula === 'dt emissao' || celula.includes('emissao')
+    const linha = rows[indice] || [];
+    const chaves = linha.map(normalizarChaveCabecalho);
+
+    const temNumeroIt = chaves.some((celula) =>
+      ['numeroit', 'numeroitem', 'nroit', 'numit'].includes(celula)
+    );
+    const temCliente = chaves.some((celula) => celula === 'cliente');
+    const temStatus = chaves.some((celula) => celula === 'status');
+    const temDataEmissao = chaves.some(
+      (celula) =>
+        celula === 'dtemissao' ||
+        celula === 'dataemissao' ||
+        celula.includes('emissao')
     );
 
-    if (temNumeroIt && temCliente && temDataEmissao) {
+    if (temNumeroIt && temCliente && temStatus && temDataEmissao) {
       return indice;
     }
+  }
+
+  // Fallback controlado para o relatório padrão do ERP:
+  // as 3 primeiras linhas são metadados e o cabeçalho real fica na linha 4.
+  const linhaPadraoERP = rows[3] || [];
+  if (linhaPadraoERP.length >= 14) {
+    return 3;
   }
 
   return -1;
@@ -505,16 +545,22 @@ export default function ImportarOrcamentos({ onSucesso }: ImportarOrcamentosProp
         defval: ''
       }) as unknown[][];
 
-      const indiceCabecalho = encontrarCabecalho(rows);
-
-      if (indiceCabecalho < 0) {
-        throw new Error(
-          'Não foi possível encontrar o cabeçalho da planilha de orçamentos.'
-        );
-      }
-
-      const headersPlanilha = rows[indiceCabecalho];
-      const indices = montarIndices(headersPlanilha);
+      // O relatório de orçamentos do ERP tem colunas fixas.
+      // Para evitar falhas quando o cabeçalho muda acento, espaço, ponto ou descrição,
+      // a importação não depende mais dos nomes dos cabeçalhos.
+      //
+      // Mapeamento oficial:
+      // A = Numero It
+      // B = Cliente
+      // C = Loja
+      // F = Descricao
+      // G = Quantidade
+      // J = Status
+      // L = Pedido Venda
+      // M = Fechamento
+      // N = DT Emissao
+      const indiceCabecalho = INDICE_CABECALHO_ORCAMENTOS_PADRAO;
+      const indices = INDICES_ORCAMENTOS_FIXOS;
       const dataLimite = calcularDataLimite36Meses();
 
       const novoResumo: ResumoOrcamentos = { ...resumoInicial };
@@ -636,7 +682,17 @@ export default function ImportarOrcamentos({ onSucesso }: ImportarOrcamentosProp
       novoResumo.fechados = registrosComCliente.filter((linha) => linha.status === 'B').length;
       novoResumo.cancelados = registrosComCliente.filter((linha) => linha.status === 'C').length;
 
-      setHeaders(headersPlanilha.map((header) => texto(header)).filter(Boolean));
+      setHeaders([
+        'Numero It',
+        'Cliente',
+        'Loja',
+        'Descricao',
+        'Quantidade',
+        'Status',
+        'Pedido Venda',
+        'Fechamento',
+        'DT Emissao'
+      ]);
       setResumo(novoResumo);
       setRegistros(registrosComCliente);
       setPreview(registrosComCliente.slice(0, 20));
