@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { supabase } from '../../lib/supabase';
@@ -199,10 +199,31 @@ function escreverNavegacaoNaUrl(navegacao: EstadoNavegacaoCRM) {
   }
 }
 
+function navegacoesIguais(
+  atual: EstadoNavegacaoCRM,
+  proxima: EstadoNavegacaoCRM
+) {
+  return (
+    atual.cliente === proxima.cliente &&
+    atual.aba === proxima.aba &&
+    atual.orcamento === proxima.orcamento
+  );
+}
+
+
 function CRMContent() {
   const router = useRouter();
   const [navegacaoCRM, setNavegacaoCRM] =
     useState<EstadoNavegacaoCRM>(lerNavegacaoInicial);
+  const navegacaoCRMRef = useRef<EstadoNavegacaoCRM>(navegacaoCRM);
+
+  useEffect(() => {
+    navegacaoCRMRef.current = navegacaoCRM;
+
+    if (navegacaoCRM.cliente) {
+      salvarNavegacao(navegacaoCRM);
+    }
+  }, [navegacaoCRM]);
 
   const clienteParametro = navegacaoCRM.cliente;
   const secaoParametro = navegacaoCRM.aba;
@@ -252,6 +273,11 @@ function CRMContent() {
     error: erroContatos
   } = useContatos();
 
+  const possuiClientesEmTela = clientes.length > 0;
+  const carregamentoInicialClientes = carregandoClientes && !possuiClientesEmTela;
+  const atualizandoClientesEmSegundoPlano = carregandoClientes && possuiClientesEmTela;
+  const erroBloqueanteClientes = Boolean(erroClientes) && !possuiClientesEmTela;
+
   const atualizarParametrosNavegacao = useCallback(
     (atualizacoes: AtualizacaoParametros) => {
       const navegacaoAtual = lerNavegacaoDaUrl();
@@ -291,36 +317,68 @@ function CRMContent() {
   }, [clienteSelecionado?.id, carregarContatos]);
 
   useEffect(() => {
-    const sincronizarNavegacaoSalva = () => {
-      const navegacaoUrl = lerNavegacaoDaUrl();
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
 
-      if (navegacaoUrl.cliente || temParametrosDeNavegacaoNaUrl()) {
-        setNavegacaoCRM(navegacaoUrl);
-        salvarNavegacao(navegacaoUrl);
+    const salvarEstadoAtualDaTela = () => {
+      const navegacaoAtual = navegacaoCRMRef.current;
+
+      if (navegacaoAtual.cliente) {
+        salvarNavegacao(navegacaoAtual);
+      }
+    };
+
+    const restaurarNavegacaoSalva = () => {
+      const navegacaoUrl = lerNavegacaoDaUrl();
+      const temNavegacaoUrl = navegacaoUrl.cliente || temParametrosDeNavegacaoNaUrl();
+      const navegacaoRestaurada = temNavegacaoUrl
+        ? navegacaoUrl
+        : lerNavegacaoSalva();
+
+      if (!navegacaoRestaurada.cliente) {
         return;
       }
 
-      const navegacaoSalva = lerNavegacaoSalva();
+      if (!temNavegacaoUrl) {
+        escreverNavegacaoNaUrl(navegacaoRestaurada);
+      }
 
-      if (navegacaoSalva.cliente) {
-        escreverNavegacaoNaUrl(navegacaoSalva);
-        setNavegacaoCRM(navegacaoSalva);
+      salvarNavegacao(navegacaoRestaurada);
+
+      if (!navegacoesIguais(navegacaoCRMRef.current, navegacaoRestaurada)) {
+        setNavegacaoCRM(navegacaoRestaurada);
       }
     };
 
     const aoMudarVisibilidade = () => {
-      if (!document.hidden) {
-        sincronizarNavegacaoSalva();
+      if (document.hidden) {
+        salvarEstadoAtualDaTela();
+        return;
       }
+
+      window.setTimeout(restaurarNavegacaoSalva, 0);
     };
 
-    window.addEventListener('focus', sincronizarNavegacaoSalva);
-    window.addEventListener('pageshow', sincronizarNavegacaoSalva);
+    const aoMostrarPagina = () => {
+      window.setTimeout(restaurarNavegacaoSalva, 0);
+    };
+
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+
+    window.addEventListener('blur', salvarEstadoAtualDaTela);
+    window.addEventListener('pagehide', salvarEstadoAtualDaTela);
+    window.addEventListener('focus', aoMostrarPagina);
+    window.addEventListener('pageshow', aoMostrarPagina);
     document.addEventListener('visibilitychange', aoMudarVisibilidade);
 
     return () => {
-      window.removeEventListener('focus', sincronizarNavegacaoSalva);
-      window.removeEventListener('pageshow', sincronizarNavegacaoSalva);
+      window.removeEventListener('blur', salvarEstadoAtualDaTela);
+      window.removeEventListener('pagehide', salvarEstadoAtualDaTela);
+      window.removeEventListener('focus', aoMostrarPagina);
+      window.removeEventListener('pageshow', aoMostrarPagina);
       document.removeEventListener('visibilitychange', aoMudarVisibilidade);
     };
   }, []);
@@ -340,6 +398,10 @@ function CRMContent() {
     const clienteEncontrado = clientes.find(
       (cliente) => cliente.id === clienteParametro
     );
+
+    if (!clienteEncontrado && clientes.length === 0) {
+      return;
+    }
 
     if (!clienteEncontrado) {
       limparNavegacaoSalva();
@@ -488,7 +550,7 @@ function CRMContent() {
           onSelecionarOrcamento={abrirHistoricoPorOrcamentoAberto}
         />
 
-        {carregandoClientes ? (
+        {carregamentoInicialClientes ? (
           <div className="space-y-4">
             <LoadingSpinner label="Carregando clientes..." />
             <div className="grid gap-3 lg:grid-cols-4">
@@ -500,10 +562,10 @@ function CRMContent() {
               ))}
             </div>
           </div>
-        ) : erroClientes ? (
+        ) : erroBloqueanteClientes ? (
           <EmptyState
             title="Não foi possível carregar os clientes"
-            description={erroClientes}
+            description={erroClientes || 'Erro ao carregar clientes.'}
             action={
               <Button type="button" onClick={carregarClientes}>
                 Tentar novamente
@@ -512,6 +574,17 @@ function CRMContent() {
           />
         ) : (
           <>
+            {atualizandoClientesEmSegundoPlano ? (
+              <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+                Sincronizando dados em segundo plano...
+              </div>
+            ) : null}
+
+            {erroClientes ? (
+              <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                Não foi possível atualizar os clientes agora. Os dados em tela foram mantidos.
+              </div>
+            ) : null}
             <ResumoIndicadores
               clientes={clientes}
               clientesFiltrados={clientesFiltrados}

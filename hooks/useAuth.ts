@@ -2,19 +2,32 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { Profile } from '../types';
+import {
+  CACHE_TTL_CURTO_MS,
+  lerCacheSessao,
+  removerCacheSessao,
+  salvarCacheSessao
+} from '../utils/sessionCache';
 
 function mensagemErro(error: unknown) {
   return error instanceof Error ? error.message : 'Erro inesperado.';
 }
 
+const CHAVE_CACHE_AUTH_PROFILE = 'auth-profile';
+
+function lerPerfilInicial() {
+  return lerCacheSessao<Profile>(CHAVE_CACHE_AUTH_PROFILE, CACHE_TTL_CURTO_MS);
+}
+
 export function useAuth() {
+  const perfilInicial = lerPerfilInicial();
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<Profile | null>(perfilInicial);
+  const [loading, setLoading] = useState(!perfilInicial);
   const [error, setError] = useState<string | null>(null);
 
   const userIdRef = useRef<string | null>(null);
-  const profileRef = useRef<Profile | null>(null);
+  const profileRef = useRef<Profile | null>(perfilInicial);
   const requisicaoAtualRef = useRef(0);
 
   useEffect(() => {
@@ -74,6 +87,7 @@ export function useAuth() {
       if (!session) {
         setUser(null);
         setProfile(null);
+        removerCacheSessao(CHAVE_CACHE_AUTH_PROFILE);
         setError(null);
         setLoading(false);
         return;
@@ -90,7 +104,9 @@ export function useAuth() {
       }
 
       if (options?.mostrarLoading ?? true) {
+        if (!profileRef.current) {
         setLoading(true);
+      }
       }
 
       try {
@@ -101,11 +117,13 @@ export function useAuth() {
 
         if (requisicaoAtualRef.current === idRequisicao) {
           setProfile(perfil);
+          salvarCacheSessao(CHAVE_CACHE_AUTH_PROFILE, perfil);
           setError(null);
         }
       } catch (err) {
         if (requisicaoAtualRef.current === idRequisicao) {
           setProfile(null);
+          removerCacheSessao(CHAVE_CACHE_AUTH_PROFILE);
           setError(mensagemErro(err));
         }
       } finally {
@@ -135,12 +153,16 @@ export function useAuth() {
         }
 
         if (ativo) {
-          await aplicarSessao(session, { forcarPerfil: true, mostrarLoading: true });
+          await aplicarSessao(session, {
+            forcarPerfil: true,
+            mostrarLoading: !profileRef.current
+          });
         }
       } catch (err) {
         if (ativo) {
           setUser(null);
           setProfile(null);
+          removerCacheSessao(CHAVE_CACHE_AUTH_PROFILE);
           setError(mensagemErro(err));
           setLoading(false);
         }
