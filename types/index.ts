@@ -75,3 +75,27 @@ export interface HistoricoOrcamento {
   created_at?: string | null;
   updated_at?: string | null;
 }
+export type AuditLogAcao =
+  | 'insert'
+  | 'update'
+  | 'delete'
+  | 'update_observacoes'
+  | 'importacao_erp'
+  | 'importacao_orcamentos'
+  | string;
+
+export interface AuditLog {
+  id: string;
+  created_at: string;
+  user_id?: string | null;
+  user_email?: string | null;
+  tabela: string;
+  registro_id?: string | null;
+  cliente_id?: string | null;
+  acao: AuditLogAcao;
+  origem: string;
+  valor_anterior?: Record<string, unknown> | null;
+  valor_novo?: Record<string, unknown> | null;
+  detalhes: Record<string, unknown>;
+}
+

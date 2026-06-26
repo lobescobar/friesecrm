@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
+import { registrarAuditoriaImportacao } from '../../lib/auditoria';
 import { supabase } from '../../lib/supabase';
 import { MESES_STATUS_CLIENTE_ATIVO } from '../../utils/constants';
 import Button from '../ui/Button';
@@ -112,9 +113,6 @@ const normalizarTexto = (valor: string) =>
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim();
-
-const normalizarChaveCabecalho = (valor: unknown) =>
-  normalizarTexto(texto(valor)).replace(/[^a-z0-9]/g, '');
 
 const somenteNumeros = (valor: string) => valor.replace(/\D/g, '');
 
@@ -328,90 +326,6 @@ function converterNumeroParaBanco(valor: unknown) {
   return Number.isFinite(numero) ? numero : null;
 }
 
-function acharIndice(headers: unknown[], nomesPossiveis: string[]) {
-  const headersNormalizados = headers.map((header) => normalizarTexto(texto(header)));
-  const headersChave = headers.map(normalizarChaveCabecalho);
-  const nomesNormalizados = nomesPossiveis.map(normalizarTexto);
-  const nomesChave = nomesPossiveis.map(normalizarChaveCabecalho);
-
-  return headersNormalizados.findIndex((header, indice) => {
-    const chaveHeader = headersChave[indice];
-
-    return (
-      nomesNormalizados.some((nome) => header === nome || header.includes(nome)) ||
-      nomesChave.some(
-        (nome) =>
-          chaveHeader === nome ||
-          chaveHeader.includes(nome) ||
-          nome.includes(chaveHeader)
-      )
-    );
-  });
-}
-
-function encontrarCabecalho(rows: unknown[][]) {
-  for (let indice = 0; indice < rows.length; indice += 1) {
-    const linha = rows[indice] || [];
-    const chaves = linha.map(normalizarChaveCabecalho);
-
-    const temNumeroIt = chaves.some((celula) =>
-      ['numeroit', 'numeroitem', 'nroit', 'numit'].includes(celula)
-    );
-    const temCliente = chaves.some((celula) => celula === 'cliente');
-    const temStatus = chaves.some((celula) => celula === 'status');
-    const temDataEmissao = chaves.some(
-      (celula) =>
-        celula === 'dtemissao' ||
-        celula === 'dataemissao' ||
-        celula.includes('emissao')
-    );
-
-    if (temNumeroIt && temCliente && temStatus && temDataEmissao) {
-      return indice;
-    }
-  }
-
-  // Fallback controlado para o relatório padrão do ERP:
-  // as 3 primeiras linhas são metadados e o cabeçalho real fica na linha 4.
-  const linhaPadraoERP = rows[3] || [];
-  if (linhaPadraoERP.length >= 14) {
-    return 3;
-  }
-
-  return -1;
-}
-
-function montarIndices(headers: unknown[]): IndicesPlanilha {
-  const indices: IndicesPlanilha = {
-    numeroIt: acharIndice(headers, ['Numero It']),
-    cliente: acharIndice(headers, ['Cliente']),
-    loja: acharIndice(headers, ['Loja']),
-    pedidoVenda: acharIndice(headers, ['Pedido Venda']),
-    descricao: acharIndice(headers, ['Descricao', 'Descrição']),
-    quantidade: acharIndice(headers, ['Quantidade', 'Qtd', 'Qtde']),
-    status: acharIndice(headers, ['Status']),
-    dataEmissao: acharIndice(headers, ['DT Emissao', 'Data Emissao']),
-    dataFechamento: acharIndice(headers, ['Fechamento', 'Data Fechamento', 'DT Fechamento'])
-  };
-
-  const obrigatorios: Array<[keyof IndicesPlanilha, string]> = [
-    ['numeroIt', 'Numero It'],
-    ['cliente', 'Cliente'],
-    ['status', 'Status'],
-    ['dataEmissao', 'DT Emissao']
-  ];
-
-  const ausentes = obrigatorios
-    .filter(([campo]) => indices[campo] < 0)
-    .map(([, nome]) => nome);
-
-  if (ausentes.length > 0) {
-    throw new Error(`Colunas obrigatórias não encontradas: ${ausentes.join(', ')}`);
-  }
-
-  return indices;
-}
-
 function obterValor(linha: unknown[], indice: number) {
   return indice >= 0 ? linha[indice] : '';
 }
@@ -439,13 +353,17 @@ function normalizarClienteLoja(valorCliente: unknown, valorLoja: unknown) {
 
   const codigoBruto = partesCliente[0] || clienteTexto;
   const lojaBruta = partesCliente[1] || texto(valorLoja) || '0';
+  const numerosCodigo = somenteNumeros(codigoBruto);
+  const numerosLoja = somenteNumeros(lojaBruta);
 
-  const codigoCliente = somenteNumeros(codigoBruto).padStart(6, '0');
-  const loja = somenteNumeros(lojaBruta).padStart(2, '0');
-
-  if (!codigoCliente || !loja) {
+  // Sem código de cliente não há cliente para relacionar e a linha deve ser ignorada,
+  // sem virar "000000-00" e sem entrar como "sem cliente encontrado".
+  if (!numerosCodigo) {
     return null;
   }
+
+  const codigoCliente = numerosCodigo.padStart(6, '0');
+  const loja = numerosLoja ? numerosLoja.padStart(2, '0') : '00';
 
   return {
     codigo_cliente: codigoCliente,
@@ -592,7 +510,6 @@ export default function ImportarOrcamentos({ onSucesso }: ImportarOrcamentosProp
         );
 
         if (!clienteNormalizado) {
-          novoResumo.semCodigoCliente += 1;
           return;
         }
 
@@ -773,11 +690,24 @@ export default function ImportarOrcamentos({ onSucesso }: ImportarOrcamentosProp
       setMensagem('Histórico importado. Recalculando status dos clientes...');
       const resultadoStatus = await recalcularStatusClientesPorHistorico();
 
-      setResultado({
+      const novoResultado = {
         enviados: registrosParaGravar.length,
         lotes: pacotes.length,
         clientesAtivos: resultadoStatus.clientesAtivos
+      };
+
+      await registrarAuditoriaImportacao({
+        tabela: 'orcamentos_historico',
+        acao: 'importacao_orcamentos',
+        arquivoNome,
+        resultado: {
+          ...novoResultado,
+          mesesStatusClienteAtivo: MESES_STATUS_CLIENTE_ATIVO,
+          resumo
+        }
       });
+
+      setResultado(novoResultado);
 
       setMensagem(
         `Histórico de orçamentos importado com sucesso. Status recalculado: ${resultadoStatus.clientesAtivos.toLocaleString(

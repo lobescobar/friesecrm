@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
+import { registrarAuditoriaImportacao } from '../../lib/auditoria';
 import { supabase } from '../../lib/supabase';
 import { Cliente } from '../../types';
 import { SEGMENTOS_CLIENTES } from '../../utils/constants';
@@ -65,6 +66,24 @@ const normalizar = (valor: string) =>
     .trim();
 
 const somenteNumeros = (valor: string) => valor.replace(/\D/g, '');
+
+/**
+ * O ERP pode trazer CNPJ/CPF sem informação como ".   .   /    -".
+ * Nesses casos não existe documento válido para gravar: o campo deve ficar vazio.
+ */
+function normalizarCnpjCpfERP(valor: string) {
+  const valorLimpo = texto(valor);
+
+  if (!valorLimpo) return '';
+
+  const numeros = somenteNumeros(valorLimpo);
+
+  if (!numeros || /^0+$/.test(numeros)) {
+    return '';
+  }
+
+  return valorLimpo;
+}
 
 function normalizarSegmentoERP(valor: string): SegmentoCliente | '' {
   const segmentoNormalizado = normalizar(valor).replace(/\s+/g, ' ');
@@ -388,9 +407,10 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
 
         const empresa = nome_fantasia || razao_social || `Cliente ${codigo_cliente}`;
 
-        const cnpj =
+        const cnpj = normalizarCnpjCpfERP(
           cnpjAF ||
-          porCabecalho(linha, cabecalho, ['CNPJ', 'CNPJ/CPF', 'CNPJ CPF']);
+            porCabecalho(linha, cabecalho, ['CNPJ', 'CNPJ/CPF', 'CNPJ CPF'])
+        );
 
         if (!razao_social && !nome_fantasia && !cnpj) {
           novoResumo.ignoradosSemDados++;
@@ -567,6 +587,20 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
         ignoradosComErro,
         primeiraMensagemErro
       };
+
+      await registrarAuditoriaImportacao({
+        tabela: 'clientes',
+        acao: 'importacao_erp',
+        arquivoNome,
+        resultado: {
+          ...novoResultado,
+          validos: clientesNormalizados.length,
+          previstos: {
+            inseridos: resumo.inseridosPrevistos,
+            atualizados: resumo.atualizadosPrevistos
+          }
+        }
+      });
 
       setResultado(novoResultado);
       setMensagem('Importação concluída com sucesso.');
