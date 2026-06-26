@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { MESES_HISTORICO_ORCAMENTOS } from '../utils/constants';
 import { CACHE_TTL_CURTO_MS, lerCacheSessao, salvarCacheSessao } from '../utils/sessionCache';
 
 export type OrcamentoAbertoResumo = {
@@ -54,11 +55,11 @@ const TAMANHO_PAGINA_SUPABASE = 1000;
 
 // Nova chave para não reaproveitar cache antigo calculado com a regra anterior.
 const CHAVE_CACHE_ORCAMENTOS_ABERTOS =
-  'orcamentos-abertos:v4-paginado-status-principal';
+  'orcamentos-abertos:v5-18-meses-status-principal';
 
-function calcularDataLimite36Meses() {
+function calcularDataLimiteHistoricoOrcamentos() {
   const data = new Date();
-  data.setMonth(data.getMonth() - 36);
+  data.setMonth(data.getMonth() - MESES_HISTORICO_ORCAMENTOS);
   return data.toISOString().slice(0, 10);
 }
 
@@ -293,7 +294,7 @@ export function useOrcamentosAbertos(refreshKey = 0) {
     }));
 
     try {
-      const dataLimite = calcularDataLimite36Meses();
+      const dataLimite = calcularDataLimiteHistoricoOrcamentos();
       const linhas = await buscarTodasLinhasOrcamentosHistorico(dataLimite);
       const orcamentosAgrupados = agruparEFiltrarOrcamentosAbertos(linhas);
 

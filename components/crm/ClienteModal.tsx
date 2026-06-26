@@ -77,9 +77,15 @@ export default function ClienteModal({
   );
 
   useEffect(() => {
-    if (secaoInicial && secaoInicial !== secaoAtiva) {
-      setSecaoAtiva(secaoInicial);
+    if (!secaoInicial || secaoInicial === secaoAtiva) {
+      return undefined;
     }
+
+    const timeoutId = window.setTimeout(() => {
+      setSecaoAtiva(secaoInicial);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [secaoInicial, secaoAtiva]);
 
   useEffect(() => {

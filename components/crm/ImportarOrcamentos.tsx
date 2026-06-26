@@ -4,7 +4,10 @@ import { ChangeEvent, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { registrarAuditoriaImportacao } from '../../lib/auditoria';
 import { supabase } from '../../lib/supabase';
-import { MESES_STATUS_CLIENTE_ATIVO } from '../../utils/constants';
+import {
+  MESES_HISTORICO_ORCAMENTOS,
+  MESES_STATUS_CLIENTE_ATIVO
+} from '../../utils/constants';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 
@@ -41,7 +44,7 @@ type ResumoOrcamentos = {
   semCodigoCliente: number;
   semClienteEncontrado: number;
   dataInvalida: number;
-  fora36Meses: number;
+  foraHistoricoMeses: number;
   statusDDesconsiderado: number;
   statusInvalido: number;
   duplicadosInternos: number;
@@ -96,7 +99,7 @@ const resumoInicial: ResumoOrcamentos = {
   semCodigoCliente: 0,
   semClienteEncontrado: 0,
   dataInvalida: 0,
-  fora36Meses: 0,
+  foraHistoricoMeses: 0,
   statusDDesconsiderado: 0,
   statusInvalido: 0,
   duplicadosInternos: 0,
@@ -126,9 +129,9 @@ function lotes<T>(lista: T[], tamanho: number) {
   return resultado;
 }
 
-function calcularDataLimite36Meses() {
+function calcularDataLimiteHistoricoOrcamentos() {
   const data = new Date();
-  data.setMonth(data.getMonth() - 36);
+  data.setMonth(data.getMonth() - MESES_HISTORICO_ORCAMENTOS);
   return data.toISOString().slice(0, 10);
 }
 
@@ -479,7 +482,7 @@ export default function ImportarOrcamentos({ onSucesso }: ImportarOrcamentosProp
       // N = DT Emissao
       const indiceCabecalho = INDICE_CABECALHO_ORCAMENTOS_PADRAO;
       const indices = INDICES_ORCAMENTOS_FIXOS;
-      const dataLimite = calcularDataLimite36Meses();
+      const dataLimite = calcularDataLimiteHistoricoOrcamentos();
 
       const novoResumo: ResumoOrcamentos = { ...resumoInicial };
       const linhasProcessadas: LinhaProcessada[] = [];
@@ -536,7 +539,7 @@ export default function ImportarOrcamentos({ onSucesso }: ImportarOrcamentosProp
         }
 
         if (dataEmissao < dataLimite) {
-          novoResumo.fora36Meses += 1;
+          novoResumo.foraHistoricoMeses += 1;
           return;
         }
 
@@ -744,7 +747,7 @@ export default function ImportarOrcamentos({ onSucesso }: ImportarOrcamentosProp
       {aberto ? (
         <Modal
           title="Importar Orçamentos"
-          subtitle="Histórico dos últimos 36 meses por cliente"
+          subtitle={`Histórico dos últimos ${MESES_HISTORICO_ORCAMENTOS} meses por cliente`}
           onClose={fecharModal}
           bloquearFechamento={processando || importando}
           footer={
@@ -783,7 +786,7 @@ export default function ImportarOrcamentos({ onSucesso }: ImportarOrcamentosProp
               <p className="mt-1 text-sm text-slate-600">
                 Use a planilha Relatório de Orçamentos CRM. O sistema vai
                 considerar somente status A, B e C, ignorar status D, manter
-                apenas dados dos últimos 36 meses pela data de emissão e importar
+                apenas dados dos últimos {MESES_HISTORICO_ORCAMENTOS} meses pela data de emissão e importar
                 a data de fechamento quando houver, guardar a descrição e a quantidade do item. Após a importação, o status dos clientes será recalculado: Ativo com orçamento nos últimos{' '}
                 {MESES_STATUS_CLIENTE_ATIVO} meses; sem histórico recente, Inativo.
               </p>
@@ -858,7 +861,7 @@ export default function ImportarOrcamentos({ onSucesso }: ImportarOrcamentosProp
                 <ResumoItem label="Abertos" valor={resumo.abertos} />
                 <ResumoItem label="Fechados" valor={resumo.fechados} />
                 <ResumoItem label="Cancelados" valor={resumo.cancelados} />
-                <ResumoItem label="Fora 36 meses" valor={resumo.fora36Meses} />
+                <ResumoItem label="Fora do período" valor={resumo.foraHistoricoMeses} />
                 <ResumoItem label="Sem cliente" valor={resumo.semClienteEncontrado} />
               </div>
 

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useHistoricoCliente } from '../../hooks/useHistoricoCliente';
 import { useAuth } from '../../hooks/useAuth';
 import { HistoricoOrcamento } from '../../types';
+import { MESES_HISTORICO_ORCAMENTOS } from '../../utils/constants';
 import Button from '../ui/Button';
 import LoadingSpinner from '../ui/LoadingSpinner';
 import Modal from '../ui/Modal';
@@ -317,22 +318,26 @@ export default function HistoricoCliente({
 
   useEffect(() => {
     if (!orcamentoFocoInicial) {
-      return;
+      return undefined;
     }
 
-    const orcamentoEncontrado = historicoAgrupado.find(
-      (item) => item.numero_orcamento === orcamentoFocoInicial
-    );
+    const timeoutId = window.setTimeout(() => {
+      const orcamentoEncontrado = historicoAgrupado.find(
+        (item) => item.numero_orcamento === orcamentoFocoInicial
+      );
 
-    if (!orcamentoEncontrado) {
-      return;
-    }
+      if (!orcamentoEncontrado) {
+        return;
+      }
 
-    setOrcamentoDetalhado((atual) =>
-      atual?.numero_orcamento === orcamentoEncontrado.numero_orcamento
-        ? atual
-        : orcamentoEncontrado
-    );
+      setOrcamentoDetalhado((atual) =>
+        atual?.numero_orcamento === orcamentoEncontrado.numero_orcamento
+          ? atual
+          : orcamentoEncontrado
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [historicoAgrupado, orcamentoFocoInicial]);
 
   useEffect(() => {
@@ -461,7 +466,7 @@ export default function HistoricoCliente({
             Histórico do Cliente
           </h4>
           <p className="mt-1 text-sm text-slate-500">
-            Orçamentos dos últimos 36 meses agrupados pelo número principal.
+            Orçamentos dos últimos {MESES_HISTORICO_ORCAMENTOS} meses agrupados pelo número principal.
           </p>
           {orcamentoFocoInicial ? (
             <p className="mt-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800">
@@ -501,7 +506,7 @@ export default function HistoricoCliente({
 
       {!loading && !error && historicoAgrupado.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
-          Ainda não há orçamentos importados para este cliente nos últimos 36
+          Ainda não há orçamentos importados para este cliente nos últimos {MESES_HISTORICO_ORCAMENTOS}
           meses.
         </div>
       ) : null}

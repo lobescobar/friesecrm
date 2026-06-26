@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { MESES_HISTORICO_ORCAMENTOS } from '../utils/constants';
 import { HistoricoOrcamento } from '../types';
 import {
   CACHE_TTL_CURTO_MS,
@@ -7,9 +8,9 @@ import {
   salvarCacheSessao
 } from '../utils/sessionCache';
 
-function calcularDataLimite36Meses() {
+function calcularDataLimiteHistoricoOrcamentos() {
   const data = new Date();
-  data.setMonth(data.getMonth() - 36);
+  data.setMonth(data.getMonth() - MESES_HISTORICO_ORCAMENTOS);
   return data.toISOString().slice(0, 10);
 }
 
@@ -39,21 +40,26 @@ export function useHistoricoCliente(clienteId?: string | null, ativo = true) {
 
   useEffect(() => {
     if (!cacheKey || historicoRef.current.length > 0) {
-      return;
+      return undefined;
     }
 
-    const historicoEmCache = lerCacheSessao<HistoricoOrcamento[]>(
-      cacheKey,
-      CACHE_TTL_CURTO_MS
-    );
+    const timeoutId = window.setTimeout(() => {
+      const historicoEmCache = lerCacheSessao<HistoricoOrcamento[]>(
+        cacheKey,
+        CACHE_TTL_CURTO_MS
+      );
 
-    if (historicoEmCache) {
-      setEstado({
-        historico: historicoEmCache,
-        loading: false,
-        error: null
-      });
-    }
+      if (historicoEmCache && historicoRef.current.length === 0) {
+        historicoRef.current = historicoEmCache;
+        setEstado({
+          historico: historicoEmCache,
+          loading: false,
+          error: null
+        });
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [cacheKey]);
 
   const carregarHistorico = useCallback(async () => {
@@ -89,7 +95,7 @@ export function useHistoricoCliente(clienteId?: string | null, ativo = true) {
     }));
 
     try {
-      const dataLimite = calcularDataLimite36Meses();
+      const dataLimite = calcularDataLimiteHistoricoOrcamentos();
 
       const { data, error: erroBusca } = await supabase
         .from('orcamentos_historico')

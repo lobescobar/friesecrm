@@ -18,6 +18,7 @@ import FiltrosClientes from '../../components/crm/FiltrosClientes';
 import TabelaClientes from '../../components/crm/TabelaClientes';
 import ClienteModal from '../../components/crm/ClienteModal';
 import GestaoUsuarios from '../../components/crm/GestaoUsuarios';
+import AuditoriaAdmin from '../../components/crm/admin/AuditoriaAdmin';
 import AlertaOrcamentosAbertos from '../../components/crm/AlertaOrcamentosAbertos';
 import { OrcamentoAbertoResumo } from '../../hooks/useOrcamentosAbertos';
 import type { ClienteModalSecao } from '../../components/crm/cliente-modal/ClienteModalNav';
@@ -385,39 +386,43 @@ function CRMContent() {
 
   useEffect(() => {
     if (carregandoClientes) {
-      return;
+      return undefined;
     }
 
-    if (!clienteParametro) {
-      setClienteSelecionado(null);
-      setHistoricoInicialAberto(false);
-      setOrcamentoHistoricoFoco(null);
-      return;
-    }
+    const timeoutId = window.setTimeout(() => {
+      if (!clienteParametro) {
+        setClienteSelecionado(null);
+        setHistoricoInicialAberto(false);
+        setOrcamentoHistoricoFoco(null);
+        return;
+      }
 
-    const clienteEncontrado = clientes.find(
-      (cliente) => cliente.id === clienteParametro
-    );
+      const clienteEncontrado = clientes.find(
+        (cliente) => cliente.id === clienteParametro
+      );
 
-    if (!clienteEncontrado && clientes.length === 0) {
-      return;
-    }
+      if (!clienteEncontrado && clientes.length === 0) {
+        return;
+      }
 
-    if (!clienteEncontrado) {
-      limparNavegacaoSalva();
-      escreverNavegacaoNaUrl(navegacaoInicialPadrao);
-      setNavegacaoCRM(navegacaoInicialPadrao);
-      setClienteSelecionado(null);
-      setHistoricoInicialAberto(false);
-      setOrcamentoHistoricoFoco(null);
-      return;
-    }
+      if (!clienteEncontrado) {
+        limparNavegacaoSalva();
+        escreverNavegacaoNaUrl(navegacaoInicialPadrao);
+        setNavegacaoCRM(navegacaoInicialPadrao);
+        setClienteSelecionado(null);
+        setHistoricoInicialAberto(false);
+        setOrcamentoHistoricoFoco(null);
+        return;
+      }
 
-    setClienteSelecionado(clienteEncontrado);
-    setHistoricoInicialAberto(
-      secaoParametro === 'historico' || Boolean(orcamentoParametro)
-    );
-    setOrcamentoHistoricoFoco(orcamentoParametro);
+      setClienteSelecionado(clienteEncontrado);
+      setHistoricoInicialAberto(
+        secaoParametro === 'historico' || Boolean(orcamentoParametro)
+      );
+      setOrcamentoHistoricoFoco(orcamentoParametro);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [
     carregandoClientes,
     clientes,
@@ -599,10 +604,14 @@ function CRMContent() {
             </section>
 
             {isAdmin ? (
-              <GestaoUsuarios
-                segmentosDisponiveis={segmentosUnicos}
-                estadosDisponiveis={estadosUnicos}
-              />
+              <>
+                <GestaoUsuarios
+                  segmentosDisponiveis={segmentosUnicos}
+                  estadosDisponiveis={estadosUnicos}
+                />
+
+                <AuditoriaAdmin />
+              </>
             ) : null}
 
             <section className="mt-4 overflow-hidden rounded-2xl border bg-white shadow-sm">

@@ -38,18 +38,23 @@ export function useClientes(profile: Profile | null) {
 
   useEffect(() => {
     if (!cacheKey || clientesRef.current.length > 0) {
-      return;
+      return undefined;
     }
 
-    const clientesEmCache = lerCacheSessao<Cliente[]>(
-      cacheKey,
-      CACHE_TTL_MEDIO_MS
-    );
+    const timeoutId = window.setTimeout(() => {
+      const clientesEmCache = lerCacheSessao<Cliente[]>(
+        cacheKey,
+        CACHE_TTL_MEDIO_MS
+      );
 
-    if (clientesEmCache?.length) {
-      setClientes(clientesEmCache);
-      setLoading(false);
-    }
+      if (clientesEmCache?.length && clientesRef.current.length === 0) {
+        clientesRef.current = clientesEmCache;
+        setClientes(clientesEmCache);
+        setLoading(false);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [cacheKey]);
 
   const carregarClientes = useCallback(async () => {

@@ -13,7 +13,7 @@ Sistema comercial em Next.js para consulta de clientes, mapa, contatos, alçadas
 - Foram adicionados estados de carregamento, erro e vazio.
 - A gestão de usuários passou a usar seleção de segmentos e estados, evitando texto livre.
 - O mapa ganhou legenda, enquadramento automático dos clientes filtrados e integração com o modal.
-- O projeto não deve versionar nem enviar `.env.local`, `.git`, `.next` e `node_modules`.
+- O projeto não deve versionar nem enviar `.env.local`, `.env`, `.git`, `.next`, `node_modules` ou `tsconfig.tsbuildinfo`.
 
 ## Variáveis de ambiente
 
@@ -61,7 +61,7 @@ npm run typecheck
 npm run build
 ```
 
-Nesta versão corrigida, os três comandos foram validados no ambiente de revisão.
+Nesta versão, `npm run lint` e `npm run typecheck` foram validados no ambiente de revisão. O `npm run build` deve ser rodado em ambiente limpo com dependências instaladas para o sistema operacional local, porque o pacote original continha `node_modules` gerado no Windows.
 
 ## Observações importantes sobre o banco
 
@@ -71,7 +71,7 @@ A importação ERP usa `upsert` com:
 onConflict: "codigo_cliente"
 ```
 
-Portanto, a coluna `codigo_cliente` precisa ter índice único no Supabase. Se não houver índice único, a importação pode falhar.
+Neste projeto, `codigo_cliente` deve representar a chave segura **Código + Loja**. Portanto, a coluna `codigo_cliente` precisa ter índice único no Supabase considerando essa chave composta normalizada. Se não houver índice único, a importação pode falhar.
 
 ## Arquivos importantes
 

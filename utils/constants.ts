@@ -1,4 +1,5 @@
 export const MESES_STATUS_CLIENTE_ATIVO = 18;
+export const MESES_HISTORICO_ORCAMENTOS = 18;
 
 export const STATUS_COLORS = {
   Ativo: {
