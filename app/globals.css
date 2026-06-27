@@ -1,8 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f5f7fa;
+  --foreground: #111827;
+
+  --friese-ink: #0b1225;
+  --friese-ink-soft: #172033;
+  --friese-steel: #475569;
+  --friese-muted: #64748b;
+  --friese-line: #d8e0ea;
+  --friese-surface: #ffffff;
+  --friese-soft: #f4f7fb;
+  --friese-amber: #c58a2a;
+  --friese-amber-soft: #fff7e8;
+  --friese-success: #16a34a;
+  --friese-danger: #dc2626;
+  --friese-focus: #c58a2a;
 }
 
 @theme inline {
@@ -12,8 +25,115 @@
   --font-mono: "Courier New", monospace;
 }
 
-body {
+* {
+  box-sizing: border-box;
+}
+
+html {
   background: var(--background);
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(197, 138, 42, 0.08), transparent 34rem),
+    linear-gradient(180deg, #f8fafc 0%, #eef3f8 100%);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  outline-color: var(--friese-focus);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(197, 138, 42, 0.55);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgba(197, 138, 42, 0.22);
+}
+
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #98a6b8;
+  border: 3px solid #eef3f8;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+.crm-industrial-shell {
+  background:
+    radial-gradient(circle at 8% 0%, rgba(197, 138, 42, 0.1), transparent 26rem),
+    linear-gradient(180deg, #f8fafc 0%, #eef3f8 100%);
+}
+
+.crm-card {
+  border: 1px solid var(--friese-line);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+}
+
+.crm-field {
+  min-height: 44px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background-color 150ms ease;
+}
+
+.crm-field:hover {
+  border-color: #94a3b8;
+  background: #ffffff;
+}
+
+.crm-field:focus {
+  border-color: var(--friese-amber);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(197, 138, 42, 0.18);
+}
+
+.crm-label {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.crm-section-title {
+  color: #0f172a;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.crm-subtle-text {
+  color: #53637a;
 }

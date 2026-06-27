@@ -48,10 +48,10 @@ export default function FiltrosClientes({
     : SEGMENTOS_CLIENTES;
 
   return (
-    <div className="border-b border-slate-200 bg-white px-5 py-4">
+    <div className="border-b border-slate-200 bg-white px-5 py-5">
       <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-base font-bold text-slate-900">Clientes</h2>
+          <h2 className="crm-section-title text-lg">Clientes</h2>
           <p className="text-sm text-slate-500">
             Exibindo {totalFiltrado.toLocaleString('pt-BR')} de{' '}
             {totalClientes.toLocaleString('pt-BR')} clientes.
@@ -70,39 +70,39 @@ export default function FiltrosClientes({
 
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold uppercase text-slate-400">
+          <span className="crm-label">
             Buscar cliente
           </span>
           <input
             type="text"
             value={buscaEmpresa}
             onChange={(event) => setBuscaEmpresa(event.target.value)}
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-slate-700 focus:outline-none"
+            className="crm-field rounded-xl px-3 py-2 text-sm"
             placeholder="Nome, fantasia, CNPJ, cidade..."
           />
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold uppercase text-slate-400">
+          <span className="crm-label">
             Cód. ERP
           </span>
           <input
             type="text"
             value={buscaCodigo}
             onChange={(event) => setBuscaCodigo(event.target.value)}
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-slate-700 focus:outline-none"
+            className="crm-field rounded-xl px-3 py-2 text-sm"
             placeholder="Ex.: 000123-01"
           />
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold uppercase text-slate-400">
+          <span className="crm-label">
             Segmento
           </span>
           <select
             value={filtroSegmento}
             onChange={(event) => setFiltroSegmento(event.target.value)}
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-slate-700 focus:outline-none"
+            className="crm-field rounded-xl px-3 py-2 text-sm"
           >
             <option value="Todos">Todos</option>
             {segmentosParaFiltro.map((segmento) => (
@@ -114,13 +114,13 @@ export default function FiltrosClientes({
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold uppercase text-slate-400">
+          <span className="crm-label">
             Estado
           </span>
           <select
             value={filtroEstado}
             onChange={(event) => setFiltroEstado(event.target.value)}
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-slate-700 focus:outline-none"
+            className="crm-field rounded-xl px-3 py-2 text-sm"
           >
             <option value="Todos">Todos</option>
             {estadosUnicos.map((estado) => (
@@ -132,13 +132,13 @@ export default function FiltrosClientes({
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold uppercase text-slate-400">
+          <span className="crm-label">
             Status
           </span>
           <select
             value={filtroStatus}
             onChange={(event) => setFiltroStatus(event.target.value)}
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-slate-700 focus:outline-none"
+            className="crm-field rounded-xl px-3 py-2 text-sm"
           >
             <option value="Todos">Todos</option>
             {STATUS_OPTIONS.map((status) => (
@@ -155,7 +155,7 @@ export default function FiltrosClientes({
           {filtrosAtivos.map((filtro) => (
             <span
               key={filtro}
-              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600"
+              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600"
             >
               {filtro}
             </span>

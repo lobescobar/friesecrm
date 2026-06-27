@@ -21,27 +21,28 @@ export default function CrmHeader({
   onSair
 }: CrmHeaderProps) {
   return (
-    <header className="mb-4 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm md:flex-row md:items-center md:justify-between">
-      <div className="flex items-center gap-4">
+    <header className="crm-card mb-4 flex flex-col gap-5 rounded-3xl px-5 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <Image
           src="/logo.png"
-          alt="Logo da empresa"
-          width={180}
-          height={56}
+          alt="Friese Agroindústria"
+          width={190}
+          height={60}
           priority
           className="h-12 w-auto object-contain"
         />
 
-        <div className="hidden border-l border-slate-200 pl-4 md:block">
-          <h1 className="text-lg font-bold text-slate-900">
+        <div className="border-slate-200 sm:border-l sm:pl-5">
+          <p className="crm-label text-[#c58a2a]">Mini CRM Mapa</p>
+          <h1 className="text-xl font-extrabold tracking-tight text-slate-950">
             Painel de Gestão Comercial
           </h1>
         </div>
       </div>
 
-      <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+      <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
         {usuarioEmail ? (
-          <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-600">
+          <span className="inline-flex min-h-10 items-center justify-center rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">
             {usuarioEmail}
           </span>
         ) : null}

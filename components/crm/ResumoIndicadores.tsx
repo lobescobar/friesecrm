@@ -17,24 +17,44 @@ export default function ResumoIndicadores({
   const ativos = clientes.filter((cliente) => cliente.status === 'Ativo').length;
 
   const indicadores = [
-    { label: 'Clientes cadastrados', valor: total },
-    { label: 'Exibidos nos filtros', valor: filtrados },
-    { label: 'Com localização', valor: comCoordenadas },
-    { label: 'Ativos', valor: ativos }
+    {
+      label: 'Clientes cadastrados',
+      valor: total,
+      apoio: 'Base total importada'
+    },
+    {
+      label: 'Exibidos nos filtros',
+      valor: filtrados,
+      apoio: 'Resultado da busca atual'
+    },
+    {
+      label: 'Com localização',
+      valor: comCoordenadas,
+      apoio: 'Disponíveis no mapa'
+    },
+    {
+      label: 'Ativos',
+      valor: ativos,
+      apoio: 'Com atividade recente'
+    }
   ];
 
   return (
-    <section className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <section className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {indicadores.map((indicador) => (
         <div
           key={indicador.label}
-          className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+          className="crm-card rounded-2xl p-4"
         >
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            {indicador.label}
-          </p>
-          <p className="mt-1 text-2xl font-bold text-slate-900">
-            {indicador.valor.toLocaleString('pt-BR')}
+          <p className="crm-label">{indicador.label}</p>
+          <div className="mt-2 flex items-end justify-between gap-3">
+            <p className="text-3xl font-extrabold tracking-tight text-slate-950">
+              {indicador.valor.toLocaleString('pt-BR')}
+            </p>
+            <span className="h-2 w-10 rounded-full bg-[#c58a2a]" />
+          </div>
+          <p className="mt-2 text-xs font-medium text-slate-500">
+            {indicador.apoio}
           </p>
         </div>
       ))}

@@ -12,10 +12,10 @@ export default function ClienteCardMobile({
   onSelecionar
 }: ClienteCardMobileProps) {
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <article className="crm-card rounded-2xl p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-bold text-slate-900">{cliente.empresa}</p>
+          <p className="text-base font-extrabold text-slate-950">{cliente.empresa}</p>
           <p className="mt-1 text-xs text-slate-500">
             Cód. ERP: {cliente.codigo_cliente || '-'}
           </p>
@@ -25,14 +25,14 @@ export default function ClienteCardMobile({
 
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
         <div>
-          <dt className="text-[10px] font-bold uppercase text-slate-400">
+          <dt className="crm-label">
             Segmento
           </dt>
           <dd className="font-medium text-slate-700">{cliente.segmento || '-'}</dd>
         </div>
 
         <div>
-          <dt className="text-[10px] font-bold uppercase text-slate-400">
+          <dt className="crm-label">
             Cidade/UF
           </dt>
           <dd className="font-medium text-slate-700">

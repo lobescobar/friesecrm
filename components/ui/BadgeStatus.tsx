@@ -14,7 +14,7 @@ export default function BadgeStatus({ status }: BadgeStatusProps) {
 
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold ${classes}`}
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-bold ${classes}`}
     >
       {nome}
     </span>
