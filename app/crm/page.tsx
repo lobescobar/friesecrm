@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { supabase } from '../../lib/supabase';
@@ -55,7 +54,6 @@ function lerSnapshotClienteMontado() {
 function lerSnapshotServidorMontado() {
   return false;
 }
-
 
 type EstadoNavegacaoCRM = {
   cliente: string | null;
@@ -316,31 +314,6 @@ function NavegacaoAreasCRM({
   );
 }
 
-function AreaCabecalho({
-  etiqueta,
-  titulo,
-  descricao,
-  acao
-}: {
-  etiqueta: string;
-  titulo: string;
-  descricao: string;
-  acao?: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 md:flex-row md:items-center md:justify-between">
-      <div>
-        <p className="crm-label text-[#c58a2a]">{etiqueta}</p>
-        <h2 className="crm-section-title mt-1 text-xl">{titulo}</h2>
-        <p className="mt-1 max-w-3xl text-sm text-slate-500">{descricao}</p>
-      </div>
-
-      {acao ? <div className="flex flex-col gap-2 sm:flex-row">{acao}</div> : null}
-    </div>
-  );
-}
-
-
 function CRMContent() {
   const router = useRouter();
   const clienteMontado = useSyncExternalStore(
@@ -348,6 +321,7 @@ function CRMContent() {
     lerSnapshotClienteMontado,
     lerSnapshotServidorMontado
   );
+
   const [navegacaoCRM, setNavegacaoCRM] =
     useState<EstadoNavegacaoCRM>(navegacaoInicialPadrao);
   const [navegacaoInicialCarregada, setNavegacaoInicialCarregada] = useState(false);
@@ -379,7 +353,14 @@ function CRMContent() {
   const secaoParametro = navegacaoCRM.aba;
   const orcamentoParametro = navegacaoCRM.orcamento;
 
-  const { user, profile, loading: verificandoLogin, error: erroAuth, isAdmin } = useAuth();
+  const {
+    user,
+    profile,
+    loading: verificandoLogin,
+    error: erroAuth,
+    isAdmin
+  } = useAuth();
+
   const {
     clientes,
     loading: carregandoClientes,
@@ -734,6 +715,7 @@ function CRMContent() {
                 Não foi possível atualizar os clientes agora. Os dados em tela foram mantidos.
               </div>
             ) : null}
+
             <NavegacaoAreasCRM
               areaAtiva={
                 !isAdmin &&
@@ -785,71 +767,31 @@ function CRMContent() {
             ) : null}
 
             {areaAtiva === 'mapa' ? (
-              <section className="crm-card overflow-hidden rounded-3xl">
-                <AreaCabecalho
-                  etiqueta="Geolocalização"
-                  titulo="Mapa de clientes"
-                  descricao="Área dedicada para visualizar clientes com coordenadas cadastradas. Use este ambiente quando precisar trabalhar com localização."
-                  acao={
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => setAreaAtiva('clientes')}
-                    >
-                      Ver clientes
-                    </Button>
-                  }
-                />
-
-                <div className="h-[420px] overflow-hidden p-3 sm:h-[520px]">
-                  <div className="h-full overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                    <MapaClientes
-                      clientes={clientesFiltrados}
-                      clienteSelecionadoId={clienteSelecionado?.id}
-                      onSelecionarCliente={selecionarCliente}
-                    />
-                  </div>
+              <section className="crm-card overflow-hidden rounded-3xl p-3 sm:p-4">
+                <div className="h-[420px] overflow-hidden rounded-2xl border border-slate-200 bg-white sm:h-[520px]">
+                  <MapaClientes
+                    clientes={clientesFiltrados}
+                    clienteSelecionadoId={clienteSelecionado?.id}
+                    onSelecionarCliente={selecionarCliente}
+                  />
                 </div>
               </section>
             ) : null}
 
-            {(areaAtiva === 'orcamentos' || (!isAdmin && (areaAtiva === 'administracao' || areaAtiva === 'auditoria'))) ? (
-              <section className="crm-card overflow-hidden rounded-3xl">
-                <AreaCabecalho
-                  etiqueta="Comercial"
-                  titulo="Orçamentos em aberto"
-                  descricao="Área dedicada para consultar orçamentos em aberto e acessar o histórico do cliente sem misturar esta rotina com mapa ou cadastro."
-                  acao={
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => setAreaAtiva('clientes')}
-                    >
-                      Voltar aos clientes
-                    </Button>
-                  }
+            {(areaAtiva === 'orcamentos' ||
+              (!isAdmin &&
+                (areaAtiva === 'administracao' || areaAtiva === 'auditoria'))) ? (
+              <section className="crm-card overflow-hidden rounded-3xl p-4">
+                <AlertaOrcamentosAbertos
+                  refreshKey={versaoOrcamentosAbertos}
+                  mostrarVazio
+                  onSelecionarOrcamento={abrirHistoricoPorOrcamentoAberto}
                 />
-
-                <div className="p-4">
-                  <AlertaOrcamentosAbertos
-                    refreshKey={versaoOrcamentosAbertos}
-                    mostrarVazio
-                    onSelecionarOrcamento={abrirHistoricoPorOrcamentoAberto}
-                  />
-                </div>
               </section>
             ) : null}
 
             {isAdmin && areaAtiva === 'administracao' ? (
               <section className="space-y-4">
-                <div className="crm-card rounded-3xl">
-                  <AreaCabecalho
-                    etiqueta="Administração"
-                    titulo="Usuários e alçadas"
-                    descricao="Gerencie o acesso por perfil, estados e segmentos permitidos. Esta área aparece apenas para administradores."
-                  />
-                </div>
-
                 <GestaoUsuarios
                   segmentosDisponiveis={segmentosUnicos}
                   estadosDisponiveis={estadosUnicos}
@@ -859,14 +801,6 @@ function CRMContent() {
 
             {isAdmin && areaAtiva === 'auditoria' ? (
               <section className="space-y-4">
-                <div className="crm-card rounded-3xl">
-                  <AreaCabecalho
-                    etiqueta="Auditoria"
-                    titulo="Auditoria do CRM"
-                    descricao="Consulte registros técnicos de importações, contatos, observações e eventos administrativos."
-                  />
-                </div>
-
                 <AuditoriaAdmin />
               </section>
             ) : null}
