@@ -12,6 +12,7 @@ import Modal from '../ui/Modal';
 type HistoricoClienteProps = {
   clienteId: string;
   aberto: boolean;
+  clienteSegmento?: string | null;
   orcamentoFocoInicial?: string | null;
   onOrcamentoDetalheChange?: (numeroOrcamento: string | null) => void;
 };
@@ -85,23 +86,47 @@ function obterDescricaoStatus(status: HistoricoOrcamento['status']) {
   return 'Cancelado';
 }
 
+const EMAIL_CANCELAMENTO_PADRAO = 'vendas.ai@friese.com.br';
+const EMAIL_CANCELAMENTO_CORRUGADOS = 'vendas.cr@friese.com.br';
+
+function normalizarSegmentoCancelamento(segmento?: string | null) {
+  return (segmento || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function obterEmailCancelamentoPorSegmento(segmento?: string | null) {
+  const segmentoNormalizado = normalizarSegmentoCancelamento(segmento);
+
+  if (segmentoNormalizado === 'corrugados') {
+    return EMAIL_CANCELAMENTO_CORRUGADOS;
+  }
+
+  return EMAIL_CANCELAMENTO_PADRAO;
+}
+
 function montarUrlEmailCancelamento(params: {
   numeroOrcamento: string;
   solicitante: string;
   motivo: string;
+  destinatario: string;
+  segmentoCliente?: string | null;
 }) {
   const assunto = `Solicitação de cancelamento do orçamento ${params.numeroOrcamento}`;
   const corpo = [
     'Favor cancelar o orçamento a seguir.',
     '',
     `Número do orçamento: ${params.numeroOrcamento}`,
+    `Segmento do cliente: ${params.segmentoCliente || '-'}`,
     `Vendedor/Solicitante CRM: ${params.solicitante}`,
     `Motivo: ${params.motivo}`,
     '',
-    'Solicitação enviada pelo Painel de Gestão Comercial.'
+    'Solicitação enviada pelo Painel comercial.'
   ].join('\n');
 
-  return `mailto:vendas.ai@friese.com.br?subject=${encodeURIComponent(
+  return `mailto:${params.destinatario}?subject=${encodeURIComponent(
     assunto
   )}&body=${encodeURIComponent(corpo)}`;
 }
@@ -251,6 +276,7 @@ function ordenarHistorico(
 export default function HistoricoCliente({
   clienteId,
   aberto,
+  clienteSegmento,
   orcamentoFocoInicial = null,
   onOrcamentoDetalheChange
 }: HistoricoClienteProps) {
@@ -272,6 +298,11 @@ export default function HistoricoCliente({
   const [erroCancelamento, setErroCancelamento] = useState<string | null>(null);
   const [mensagemCancelamento, setMensagemCancelamento] = useState<string | null>(
     null
+  );
+
+  const emailCancelamento = useMemo(
+    () => obterEmailCancelamentoPorSegmento(clienteSegmento),
+    [clienteSegmento]
   );
   const orcamentoDetalhadoRef =
     useRef<HistoricoOrcamentoAgrupado | null>(null);
@@ -445,7 +476,9 @@ export default function HistoricoCliente({
     window.location.href = montarUrlEmailCancelamento({
       numeroOrcamento: orcamentoCancelamento.numero_orcamento,
       solicitante,
-      motivo
+      motivo,
+      destinatario: emailCancelamento,
+      segmentoCliente: clienteSegmento
     });
 
     setMensagemCancelamento(
@@ -996,8 +1029,8 @@ export default function HistoricoCliente({
               </p>
               <p className="mt-1">
                 Ela prepara um e-mail para solicitar o cancelamento ao endereço
-                vendas.ai@friese.com.br. O envio será confirmado no seu
-                aplicativo de e-mail.
+                {emailCancelamento}. O envio será confirmado no seu aplicativo
+                de e-mail.
               </p>
             </div>
 

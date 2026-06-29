@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { supabase } from '../../lib/supabase';
@@ -41,6 +42,20 @@ const secoesCliente: ClienteModalSecao[] = [
 ];
 
 const CHAVE_NAVEGACAO_CRM = 'friese-crm:navegacao-atual';
+
+function assinarMontagemCliente(onStoreChange: () => void) {
+  const timeoutId = window.setTimeout(onStoreChange, 0);
+  return () => window.clearTimeout(timeoutId);
+}
+
+function lerSnapshotClienteMontado() {
+  return true;
+}
+
+function lerSnapshotServidorMontado() {
+  return false;
+}
+
 
 type EstadoNavegacaoCRM = {
   cliente: string | null;
@@ -211,20 +226,154 @@ function navegacoesIguais(
   );
 }
 
+type AreaCRM =
+  | 'orcamentos'
+  | 'clientes'
+  | 'mapa'
+  | 'administracao'
+  | 'auditoria';
+
+type AreaNavegacaoCRM = {
+  id: AreaCRM;
+  titulo: string;
+  descricao: string;
+  adminOnly?: boolean;
+};
+
+const areasCRM: AreaNavegacaoCRM[] = [
+  {
+    id: 'orcamentos',
+    titulo: 'Orçamentos',
+    descricao: 'Abertos'
+  },
+  {
+    id: 'clientes',
+    titulo: 'Clientes',
+    descricao: 'Filtros e cadastro'
+  },
+  {
+    id: 'mapa',
+    titulo: 'Mapa',
+    descricao: 'Localização'
+  },
+  {
+    id: 'administracao',
+    titulo: 'Administração',
+    descricao: 'Usuários',
+    adminOnly: true
+  },
+  {
+    id: 'auditoria',
+    titulo: 'Auditoria',
+    descricao: 'Registros',
+    adminOnly: true
+  }
+];
+
+function NavegacaoAreasCRM({
+  areaAtiva,
+  isAdmin,
+  onChange
+}: {
+  areaAtiva: AreaCRM;
+  isAdmin: boolean;
+  onChange: (area: AreaCRM) => void;
+}) {
+  const areasVisiveis = areasCRM.filter((area) => !area.adminOnly || isAdmin);
+
+  return (
+    <nav
+      aria-label="Áreas do CRM"
+      className="crm-card mb-4 rounded-3xl p-3"
+    >
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        {areasVisiveis.map((area) => {
+          const ativa = areaAtiva === area.id;
+
+          return (
+            <button
+              key={area.id}
+              type="button"
+              onClick={() => onChange(area.id)}
+              aria-current={ativa ? 'page' : undefined}
+              className={`min-h-20 rounded-2xl border px-4 py-3 text-left transition focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-amber-400 ${
+                ativa
+                  ? 'border-[#c58a2a] bg-[#fff7e8] text-slate-950 shadow-sm'
+                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              <span className="block text-sm font-extrabold">
+                {area.titulo}
+              </span>
+              <span className="mt-1 block text-xs font-medium text-slate-500">
+                {area.descricao}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+function AreaCabecalho({
+  etiqueta,
+  titulo,
+  descricao,
+  acao
+}: {
+  etiqueta: string;
+  titulo: string;
+  descricao: string;
+  acao?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 md:flex-row md:items-center md:justify-between">
+      <div>
+        <p className="crm-label text-[#c58a2a]">{etiqueta}</p>
+        <h2 className="crm-section-title mt-1 text-xl">{titulo}</h2>
+        <p className="mt-1 max-w-3xl text-sm text-slate-500">{descricao}</p>
+      </div>
+
+      {acao ? <div className="flex flex-col gap-2 sm:flex-row">{acao}</div> : null}
+    </div>
+  );
+}
+
 
 function CRMContent() {
   const router = useRouter();
+  const clienteMontado = useSyncExternalStore(
+    assinarMontagemCliente,
+    lerSnapshotClienteMontado,
+    lerSnapshotServidorMontado
+  );
   const [navegacaoCRM, setNavegacaoCRM] =
-    useState<EstadoNavegacaoCRM>(lerNavegacaoInicial);
+    useState<EstadoNavegacaoCRM>(navegacaoInicialPadrao);
+  const [navegacaoInicialCarregada, setNavegacaoInicialCarregada] = useState(false);
   const navegacaoCRMRef = useRef<EstadoNavegacaoCRM>(navegacaoCRM);
+  const [areaAtiva, setAreaAtiva] = useState<AreaCRM>('orcamentos');
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setNavegacaoCRM(lerNavegacaoInicial());
+      setNavegacaoInicialCarregada(true);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   useEffect(() => {
     navegacaoCRMRef.current = navegacaoCRM;
 
+    if (!navegacaoInicialCarregada) {
+      return;
+    }
+
     if (navegacaoCRM.cliente) {
       salvarNavegacao(navegacaoCRM);
     }
-  }, [navegacaoCRM]);
+  }, [navegacaoCRM, navegacaoInicialCarregada]);
 
   const clienteParametro = navegacaoCRM.cliente;
   const secaoParametro = navegacaoCRM.aba;
@@ -519,7 +668,7 @@ function CRMContent() {
     });
   };
 
-  if (verificandoLogin) {
+  if (!clienteMontado || !navegacaoInicialCarregada || verificandoLogin) {
     return (
       <main className="min-h-screen bg-slate-100 px-4 py-8">
         <div className="mx-auto max-w-xl">
@@ -549,11 +698,6 @@ function CRMContent() {
             {erroAuth}
           </div>
         ) : null}
-
-        <AlertaOrcamentosAbertos
-          refreshKey={versaoOrcamentosAbertos}
-          onSelecionarOrcamento={abrirHistoricoPorOrcamentoAberto}
-        />
 
         {carregamentoInicialClientes ? (
           <div className="space-y-4">
@@ -590,59 +734,142 @@ function CRMContent() {
                 Não foi possível atualizar os clientes agora. Os dados em tela foram mantidos.
               </div>
             ) : null}
-            <ResumoIndicadores
-              clientes={clientes}
-              clientesFiltrados={clientesFiltrados}
+            <NavegacaoAreasCRM
+              areaAtiva={
+                !isAdmin &&
+                (areaAtiva === 'administracao' || areaAtiva === 'auditoria')
+                  ? 'orcamentos'
+                  : areaAtiva
+              }
+              isAdmin={isAdmin}
+              onChange={setAreaAtiva}
             />
 
-            <section className="mb-4 h-[420px] overflow-hidden rounded-2xl border bg-white p-3 shadow-sm">
-              <MapaClientes
-                clientes={clientesFiltrados}
-                clienteSelecionadoId={clienteSelecionado?.id}
-                onSelecionarCliente={selecionarCliente}
-              />
-            </section>
+            {areaAtiva === 'clientes' ? (
+              <div className="space-y-4">
+                <ResumoIndicadores
+                  clientes={clientes}
+                  clientesFiltrados={clientesFiltrados}
+                />
 
-            {isAdmin ? (
-              <>
+                <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <FiltrosClientes
+                    buscaEmpresa={buscaEmpresa}
+                    setBuscaEmpresa={setBuscaEmpresa}
+                    buscaCodigo={buscaCodigo}
+                    setBuscaCodigo={setBuscaCodigo}
+                    filtroStatus={filtroStatus}
+                    setFiltroStatus={setFiltroStatus}
+                    filtroEstado={filtroEstado}
+                    setFiltroEstado={setFiltroEstado}
+                    filtroSegmento={filtroSegmento}
+                    setFiltroSegmento={setFiltroSegmento}
+                    estadosUnicos={estadosUnicos}
+                    segmentosUnicos={segmentosUnicos}
+                    filtrosAtivos={filtrosAtivos}
+                    totalClientes={clientes.length}
+                    totalFiltrado={clientesFiltrados.length}
+                    onLimparFiltros={limparFiltros}
+                  />
+
+                  <TabelaClientes
+                    clientes={clientesFiltrados}
+                    totalClientes={clientes.length}
+                    ordenacao={ordenacao}
+                    onOrdenar={alternarOrdenacao}
+                    onSelecionarCliente={selecionarCliente}
+                    onLimparFiltros={limparFiltros}
+                  />
+                </section>
+              </div>
+            ) : null}
+
+            {areaAtiva === 'mapa' ? (
+              <section className="crm-card overflow-hidden rounded-3xl">
+                <AreaCabecalho
+                  etiqueta="Geolocalização"
+                  titulo="Mapa de clientes"
+                  descricao="Área dedicada para visualizar clientes com coordenadas cadastradas. Use este ambiente quando precisar trabalhar com localização."
+                  acao={
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setAreaAtiva('clientes')}
+                    >
+                      Ver clientes
+                    </Button>
+                  }
+                />
+
+                <div className="h-[420px] overflow-hidden p-3 sm:h-[520px]">
+                  <div className="h-full overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                    <MapaClientes
+                      clientes={clientesFiltrados}
+                      clienteSelecionadoId={clienteSelecionado?.id}
+                      onSelecionarCliente={selecionarCliente}
+                    />
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
+            {(areaAtiva === 'orcamentos' || (!isAdmin && (areaAtiva === 'administracao' || areaAtiva === 'auditoria'))) ? (
+              <section className="crm-card overflow-hidden rounded-3xl">
+                <AreaCabecalho
+                  etiqueta="Comercial"
+                  titulo="Orçamentos em aberto"
+                  descricao="Área dedicada para consultar orçamentos em aberto e acessar o histórico do cliente sem misturar esta rotina com mapa ou cadastro."
+                  acao={
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setAreaAtiva('clientes')}
+                    >
+                      Voltar aos clientes
+                    </Button>
+                  }
+                />
+
+                <div className="p-4">
+                  <AlertaOrcamentosAbertos
+                    refreshKey={versaoOrcamentosAbertos}
+                    mostrarVazio
+                    onSelecionarOrcamento={abrirHistoricoPorOrcamentoAberto}
+                  />
+                </div>
+              </section>
+            ) : null}
+
+            {isAdmin && areaAtiva === 'administracao' ? (
+              <section className="space-y-4">
+                <div className="crm-card rounded-3xl">
+                  <AreaCabecalho
+                    etiqueta="Administração"
+                    titulo="Usuários e alçadas"
+                    descricao="Gerencie o acesso por perfil, estados e segmentos permitidos. Esta área aparece apenas para administradores."
+                  />
+                </div>
+
                 <GestaoUsuarios
                   segmentosDisponiveis={segmentosUnicos}
                   estadosDisponiveis={estadosUnicos}
                 />
-
-                <AuditoriaAdmin />
-              </>
+              </section>
             ) : null}
 
-            <section className="mt-4 overflow-hidden rounded-2xl border bg-white shadow-sm">
-              <FiltrosClientes
-                buscaEmpresa={buscaEmpresa}
-                setBuscaEmpresa={setBuscaEmpresa}
-                buscaCodigo={buscaCodigo}
-                setBuscaCodigo={setBuscaCodigo}
-                filtroStatus={filtroStatus}
-                setFiltroStatus={setFiltroStatus}
-                filtroEstado={filtroEstado}
-                setFiltroEstado={setFiltroEstado}
-                filtroSegmento={filtroSegmento}
-                setFiltroSegmento={setFiltroSegmento}
-                estadosUnicos={estadosUnicos}
-                segmentosUnicos={segmentosUnicos}
-                filtrosAtivos={filtrosAtivos}
-                totalClientes={clientes.length}
-                totalFiltrado={clientesFiltrados.length}
-                onLimparFiltros={limparFiltros}
-              />
+            {isAdmin && areaAtiva === 'auditoria' ? (
+              <section className="space-y-4">
+                <div className="crm-card rounded-3xl">
+                  <AreaCabecalho
+                    etiqueta="Auditoria"
+                    titulo="Auditoria do CRM"
+                    descricao="Consulte registros técnicos de importações, contatos, observações e eventos administrativos."
+                  />
+                </div>
 
-              <TabelaClientes
-                clientes={clientesFiltrados}
-                totalClientes={clientes.length}
-                ordenacao={ordenacao}
-                onOrdenar={alternarOrdenacao}
-                onSelecionarCliente={selecionarCliente}
-                onLimparFiltros={limparFiltros}
-              />
-            </section>
+                <AuditoriaAdmin />
+              </section>
+            ) : null}
           </>
         )}
       </div>

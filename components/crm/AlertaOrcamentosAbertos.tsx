@@ -10,6 +10,7 @@ import Modal from '../ui/Modal';
 
 type AlertaOrcamentosAbertosProps = {
   refreshKey?: number;
+  mostrarVazio?: boolean;
   onSelecionarOrcamento?: (orcamento: OrcamentoAbertoResumo) => void;
 };
 
@@ -90,6 +91,7 @@ function ordenarOrcamentosAbertos(
 
 export default function AlertaOrcamentosAbertos({
   refreshKey = 0,
+  mostrarVazio = false,
   onSelecionarOrcamento
 }: AlertaOrcamentosAbertosProps) {
   const [modalAberto, setModalAberto] = useState(false);
@@ -134,7 +136,15 @@ export default function AlertaOrcamentosAbertos({
   };
 
   if (loading && orcamentos.length === 0) {
-    return null;
+    if (!mostrarVazio) {
+      return null;
+    }
+
+    return (
+      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+        Verificando orçamentos em aberto...
+      </section>
+    );
   }
 
   if (error) {
@@ -159,7 +169,34 @@ export default function AlertaOrcamentosAbertos({
   }
 
   if (orcamentos.length === 0) {
-    return null;
+    if (!mostrarVazio) {
+      return null;
+    }
+
+    return (
+      <section className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-base font-bold text-green-900">
+              Nenhum orçamento em aberto encontrado.
+            </h2>
+            <p className="mt-1">
+              A área será preenchida automaticamente quando houver orçamentos
+              em aberto na base importada.
+            </p>
+          </div>
+
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={carregarOrcamentosAbertos}
+            disabled={loading}
+          >
+            Atualizar
+          </Button>
+        </div>
+      </section>
+    );
   }
 
   return (

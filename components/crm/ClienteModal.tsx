@@ -186,6 +186,7 @@ export default function ClienteModal({
         <HistoricoCliente
           clienteId={cliente.id}
           aberto
+          clienteSegmento={cliente.segmento}
           orcamentoFocoInicial={orcamentoHistoricoFoco}
           onOrcamentoDetalheChange={onOrcamentoHistoricoChange}
         />
