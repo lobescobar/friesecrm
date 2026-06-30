@@ -6,6 +6,7 @@ import { Profile } from '../../types';
 import { ESTADOS_BRASIL, SEGMENTOS_CLIENTES } from '../../utils/constants';
 import { valorLista } from '../../utils/validators';
 import Button from '../ui/Button';
+import Modal from '../ui/Modal';
 import RegrasCancelamentoOrcamentos from './admin/RegrasCancelamentoOrcamentos';
 
 type GestaoUsuariosProps = {
@@ -67,7 +68,7 @@ function ListaCheckbox({
         {titulo}
       </legend>
 
-      <div className="mt-2 max-h-36 overflow-auto rounded-xl border border-slate-200 bg-white p-2">
+      <div className="mt-2 max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white p-2">
         {opcoes.map((opcao) => (
           <label
             key={opcao}
@@ -96,6 +97,7 @@ export default function GestaoUsuarios({
   const [criando, setCriando] = useState(false);
   const [novoUsuario, setNovoUsuario] = useState<NovoUsuario>(novoUsuarioInicial);
   const [mensagem, setMensagem] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
 
   const segmentos = useMemo(() => {
     const segmentosBancoPadronizados = segmentosDisponiveis
@@ -153,6 +155,8 @@ export default function GestaoUsuarios({
       if (!confirmou) return;
     }
 
+    setSalvando(true);
+
     const { error } = await supabase
       .from('profiles')
       .update({
@@ -166,11 +170,67 @@ export default function GestaoUsuarios({
 
     if (error) {
       setMensagem(`Erro ao atualizar usuário: ${error.message}`);
+      setSalvando(false);
       return;
     }
 
     setMensagem('Usuário atualizado com sucesso.');
     setEditando(null);
+    setSalvando(false);
+    carregarUsuarios();
+  }
+
+  async function excluirUsuario(usuario: Profile) {
+    const confirmou = window.confirm(
+      [
+        `Excluir o usuário ${usuario.email}?`,
+        '',
+        'Esta ação remove o acesso ao CRM e apaga o cadastro de autenticação do usuário.',
+        'Ela não remove clientes, orçamentos nem históricos já importados.',
+        '',
+        'Deseja continuar?'
+      ].join('\n')
+    );
+
+    if (!confirmou) return;
+
+    const {
+      data: { session }
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      setMensagem('Sessão expirada. Faça login novamente.');
+      return;
+    }
+
+    setSalvando(true);
+    setMensagem('Excluindo usuário...');
+
+    const resposta = await fetch('/api/admin/delete-user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({
+        userId: usuario.id
+      })
+    });
+
+    const resultado = (await resposta.json()) as {
+      error?: string;
+      message?: string;
+    };
+
+    if (!resposta.ok) {
+      setMensagem(resultado.error || 'Não foi possível excluir o usuário.');
+      setSalvando(false);
+      return;
+    }
+
+    setMensagem(resultado.message || 'Usuário excluído com sucesso.');
+    setEditando(null);
+    setSalvando(false);
     carregarUsuarios();
   }
 
@@ -197,6 +257,7 @@ export default function GestaoUsuarios({
       return;
     }
 
+    setSalvando(true);
     setMensagem('Criando usuário...');
 
     const resposta = await fetch('/api/admin/create-user', {
@@ -220,12 +281,14 @@ export default function GestaoUsuarios({
 
     if (!resposta.ok) {
       setMensagem(resultado.error || 'Não foi possível criar o usuário.');
+      setSalvando(false);
       return;
     }
 
     setMensagem(resultado.message || 'Usuário criado com sucesso.');
     setNovoUsuario(novoUsuarioInicial);
     setCriando(false);
+    setSalvando(false);
     carregarUsuarios();
   }
 
@@ -242,201 +305,219 @@ export default function GestaoUsuarios({
       <RegrasCancelamentoOrcamentos segmentosDisponiveis={segmentos} />
 
       <section className="mt-4 overflow-hidden rounded-2xl border bg-white shadow-sm">
-      <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-6 py-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-lg font-bold">Gestão de Usuários e Alçadas</h2>
-          <p className="text-sm text-slate-500">
-            Controle quem acessa segmentos e estados do CRM.
-          </p>
-        </div>
-
-        <Button type="button" onClick={() => setCriando((atual) => !atual)}>
-          {criando ? 'Cancelar criação' : 'Criar usuário'}
-        </Button>
-      </div>
-
-      {mensagem ? (
-        <div className="mx-6 mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          {mensagem}
-        </div>
-      ) : null}
-
-      {criando ? (
-        <div className="grid gap-4 border-b border-slate-200 p-6 lg:grid-cols-2">
-          <div className="space-y-3">
-            <label className="block">
-              <span className="text-[10px] font-bold uppercase text-slate-400">
-                E-mail
-              </span>
-              <input
-                type="email"
-                value={novoUsuario.email}
-                onChange={(event) =>
-                  setNovoUsuario({ ...novoUsuario, email: event.target.value })
-                }
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-              />
-            </label>
-
-            <label className="block">
-              <span className="text-[10px] font-bold uppercase text-slate-400">
-                Senha provisória
-              </span>
-              <input
-                type="password"
-                value={novoUsuario.password}
-                onChange={(event) =>
-                  setNovoUsuario({ ...novoUsuario, password: event.target.value })
-                }
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-              />
-            </label>
-
-            <label className="block">
-              <span className="text-[10px] font-bold uppercase text-slate-400">
-                Perfil
-              </span>
-              <select
-                value={novoUsuario.role}
-                onChange={(event) =>
-                  setNovoUsuario({
-                    ...novoUsuario,
-                    role: event.target.value as Profile['role']
-                  })
-                }
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-              >
-                <option value="vendedor">Vendedor</option>
-                <option value="admin">Administrador</option>
-              </select>
-            </label>
-
-            <Button type="button" onClick={criarUsuario}>
-              Criar usuário
-            </Button>
+        <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-6 py-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-lg font-bold">Gestão de Usuários e Alçadas</h2>
+            <p className="text-sm text-slate-500">
+              Controle quem acessa segmentos e estados do CRM.
+            </p>
           </div>
 
-          {novoUsuario.role !== 'admin' ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              <ListaCheckbox
-                titulo="Segmentos permitidos"
-                opcoes={segmentos}
-                selecionados={novoUsuario.segmentos_permitidos}
-                onChange={(valores) =>
-                  setNovoUsuario({
-                    ...novoUsuario,
-                    segmentos_permitidos: valores
-                  })
-                }
-              />
-
-              <ListaCheckbox
-                titulo="Estados permitidos"
-                opcoes={estados}
-                selecionados={novoUsuario.estados_permitidos}
-                onChange={(valores) =>
-                  setNovoUsuario({
-                    ...novoUsuario,
-                    estados_permitidos: valores
-                  })
-                }
-              />
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4 text-sm text-purple-700">
-              Administradores têm acesso total a todos os clientes e alçadas.
-            </div>
-          )}
+          <Button
+            type="button"
+            onClick={() => setCriando((atual) => !atual)}
+            disabled={salvando}
+          >
+            {criando ? 'Cancelar criação' : 'Criar usuário'}
+          </Button>
         </div>
-      ) : null}
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50">
-            <tr>
-              <th className="px-6 py-3 text-left font-semibold">E-mail</th>
-              <th className="px-6 py-3 text-left font-semibold">Cargo</th>
-              <th className="px-6 py-3 text-left font-semibold">
-                Alçadas
-              </th>
-              <th className="px-6 py-3 text-right font-semibold">Ações</th>
-            </tr>
-          </thead>
+        {mensagem ? (
+          <div className="mx-6 mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            {mensagem}
+          </div>
+        ) : null}
 
-          <tbody>
-            {usuarios.map((usuario) => (
-              <tr
-                key={usuario.id}
-                className="border-b border-slate-100 hover:bg-slate-50"
-              >
-                <td className="px-6 py-4">{usuario.email}</td>
-                <td className="px-6 py-4">
-                  <span
-                    className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${
-                      usuario.role === 'admin'
-                        ? 'bg-purple-100 text-purple-700'
-                        : 'bg-blue-100 text-blue-700'
-                    }`}
-                  >
-                    {usuario.role}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-xs text-slate-500">
-                  {usuario.role === 'admin' ? (
-                    'Acesso total'
-                  ) : (
-                    <div>
-                      <p>
-                        <strong>Seg:</strong>{' '}
-                        {usuario.segmentos_permitidos?.join(', ') || 'Todos'}
-                      </p>
-                      <p>
-                        <strong>UF:</strong>{' '}
-                        {usuario.estados_permitidos?.join(', ') || 'Todos'}
-                      </p>
-                    </div>
-                  )}
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      setEditando(usuario);
-                      setMensagem(null);
-                    }}
-                  >
-                    Editar
-                  </Button>
-                </td>
+        {criando ? (
+          <div className="grid gap-4 border-b border-slate-200 p-6 lg:grid-cols-2">
+            <div className="space-y-3">
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase text-slate-400">
+                  E-mail
+                </span>
+                <input
+                  type="email"
+                  value={novoUsuario.email}
+                  onChange={(event) =>
+                    setNovoUsuario({ ...novoUsuario, email: event.target.value })
+                  }
+                  className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase text-slate-400">
+                  Senha provisória
+                </span>
+                <input
+                  type="password"
+                  value={novoUsuario.password}
+                  onChange={(event) =>
+                    setNovoUsuario({ ...novoUsuario, password: event.target.value })
+                  }
+                  className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-[10px] font-bold uppercase text-slate-400">
+                  Perfil
+                </span>
+                <select
+                  value={novoUsuario.role}
+                  onChange={(event) =>
+                    setNovoUsuario({
+                      ...novoUsuario,
+                      role: event.target.value as Profile['role']
+                    })
+                  }
+                  className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                >
+                  <option value="vendedor">Vendedor</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </label>
+
+              <Button type="button" onClick={criarUsuario} disabled={salvando}>
+                Criar usuário
+              </Button>
+            </div>
+
+            {novoUsuario.role !== 'admin' ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <ListaCheckbox
+                  titulo="Segmentos permitidos"
+                  opcoes={segmentos}
+                  selecionados={novoUsuario.segmentos_permitidos}
+                  onChange={(valores) =>
+                    setNovoUsuario({
+                      ...novoUsuario,
+                      segmentos_permitidos: valores
+                    })
+                  }
+                />
+
+                <ListaCheckbox
+                  titulo="Estados permitidos"
+                  opcoes={estados}
+                  selecionados={novoUsuario.estados_permitidos}
+                  onChange={(valores) =>
+                    setNovoUsuario({
+                      ...novoUsuario,
+                      estados_permitidos: valores
+                    })
+                  }
+                />
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4 text-sm text-purple-700">
+                Administradores têm acesso total a todos os clientes e alçadas.
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-slate-200 bg-slate-50">
+              <tr>
+                <th className="px-6 py-3 text-left font-semibold">E-mail</th>
+                <th className="px-6 py-3 text-left font-semibold">Cargo</th>
+                <th className="px-6 py-3 text-left font-semibold">Alçadas</th>
+                <th className="px-6 py-3 text-right font-semibold">Ações</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+
+            <tbody>
+              {usuarios.map((usuario) => (
+                <tr
+                  key={usuario.id}
+                  className="border-b border-slate-100 hover:bg-slate-50"
+                >
+                  <td className="px-6 py-4">{usuario.email}</td>
+                  <td className="px-6 py-4">
+                    <span
+                      className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${
+                        usuario.role === 'admin'
+                          ? 'bg-purple-100 text-purple-700'
+                          : 'bg-blue-100 text-blue-700'
+                      }`}
+                    >
+                      {usuario.role}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-xs text-slate-500">
+                    {usuario.role === 'admin' ? (
+                      'Acesso total'
+                    ) : (
+                      <div>
+                        <p>
+                          <strong>Seg:</strong>{' '}
+                          {usuario.segmentos_permitidos?.join(', ') || 'Todos'}
+                        </p>
+                        <p>
+                          <strong>UF:</strong>{' '}
+                          {usuario.estados_permitidos?.join(', ') || 'Todos'}
+                        </p>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setEditando(usuario);
+                        setMensagem(null);
+                      }}
+                    >
+                      Editar
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       {editando ? (
-        <div className="border-t border-slate-200 bg-slate-50 p-6">
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div>
-              <h3 className="font-bold text-slate-900">
-                Editando {editando.email}
-              </h3>
-              <p className="text-sm text-slate-500">
-                Use as opções abaixo para evitar erros de digitação em segmentos e estados.
-              </p>
+        <Modal
+          title={`Editar ${editando.email}`}
+          subtitle="Alçadas e perfil de acesso."
+          onClose={() => setEditando(null)}
+          scrollKey={`gestao-usuario:${editando.id}`}
+          footer={
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => excluirUsuario(editando)}
+                disabled={salvando}
+              >
+                Excluir usuário
+              </Button>
+
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setEditando(null)}
+                disabled={salvando}
+              >
+                Cancelar
+              </Button>
+
+              <Button
+                type="button"
+                onClick={salvarAlteracoes}
+                disabled={salvando}
+              >
+                Salvar alterações
+              </Button>
             </div>
-
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setEditando(null)}
-            >
-              Fechar
-            </Button>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-3">
+          }
+        >
+          <div className="space-y-5">
             <label className="block">
               <span className="text-[10px] font-bold uppercase text-slate-400">
                 Perfil
@@ -457,7 +538,7 @@ export default function GestaoUsuarios({
             </label>
 
             {editando.role !== 'admin' ? (
-              <>
+              <div className="grid gap-4 md:grid-cols-2">
                 <ListaCheckbox
                   titulo="Segmentos permitidos"
                   opcoes={segmentos}
@@ -481,30 +562,15 @@ export default function GestaoUsuarios({
                     })
                   }
                 />
-              </>
+              </div>
             ) : (
-              <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4 text-sm text-purple-700 lg:col-span-2">
+              <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4 text-sm text-purple-700">
                 Administradores têm acesso total.
               </div>
             )}
           </div>
-
-          <div className="mt-4 flex gap-2">
-            <Button type="button" onClick={salvarAlteracoes}>
-              Salvar alterações
-            </Button>
-
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setEditando(null)}
-            >
-              Cancelar
-            </Button>
-          </div>
-        </div>
+        </Modal>
       ) : null}
-      </section>
     </>
   );
 }
