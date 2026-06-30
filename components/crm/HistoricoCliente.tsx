@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useHistoricoCliente } from '../../hooks/useHistoricoCliente';
 import { useAuth } from '../../hooks/useAuth';
+import { supabase } from '../../lib/supabase';
 import { HistoricoOrcamento } from '../../types';
 import { MESES_HISTORICO_ORCAMENTOS } from '../../utils/constants';
 import Button from '../ui/Button';
@@ -89,6 +90,14 @@ function obterDescricaoStatus(status: HistoricoOrcamento['status']) {
 const EMAIL_CANCELAMENTO_PADRAO = 'vendas.ai@friese.com.br';
 const EMAIL_CANCELAMENTO_CORRUGADOS = 'vendas.cr@friese.com.br';
 
+type EmailCancelamentoConsulta = {
+  email: string;
+};
+
+type RegraCancelamentoConsulta = {
+  email_cancelamento_id: string | null;
+};
+
 function normalizarSegmentoCancelamento(segmento?: string | null) {
   return (segmento || '')
     .normalize('NFD')
@@ -97,7 +106,7 @@ function normalizarSegmentoCancelamento(segmento?: string | null) {
     .toLowerCase();
 }
 
-function obterEmailCancelamentoPorSegmento(segmento?: string | null) {
+function obterEmailCancelamentoFallback(segmento?: string | null) {
   const segmentoNormalizado = normalizarSegmentoCancelamento(segmento);
 
   if (segmentoNormalizado === 'corrugados') {
@@ -105,6 +114,58 @@ function obterEmailCancelamentoPorSegmento(segmento?: string | null) {
   }
 
   return EMAIL_CANCELAMENTO_PADRAO;
+}
+
+async function buscarEmailCancelamentoConfigurado(segmento?: string | null) {
+  const fallback = obterEmailCancelamentoFallback(segmento);
+  const segmentoNormalizado = normalizarSegmentoCancelamento(segmento);
+
+  try {
+    if (segmentoNormalizado) {
+      const { data: regra, error: erroRegra } = await supabase
+        .from('regras_cancelamento_segmentos')
+        .select('email_cancelamento_id')
+        .eq('segmento_normalizado', segmentoNormalizado)
+        .maybeSingle<RegraCancelamentoConsulta>();
+
+      if (erroRegra) {
+        throw erroRegra;
+      }
+
+      if (regra?.email_cancelamento_id) {
+        const { data: destino, error: erroDestino } = await supabase
+          .from('emails_cancelamento_orcamentos')
+          .select('email')
+          .eq('id', regra.email_cancelamento_id)
+          .eq('ativo', true)
+          .maybeSingle<EmailCancelamentoConsulta>();
+
+        if (erroDestino) {
+          throw erroDestino;
+        }
+
+        if (destino?.email) {
+          return destino.email;
+        }
+      }
+    }
+
+    const { data: padrao, error: erroPadrao } = await supabase
+      .from('emails_cancelamento_orcamentos')
+      .select('email')
+      .eq('ativo', true)
+      .eq('padrao', true)
+      .maybeSingle<EmailCancelamentoConsulta>();
+
+    if (erroPadrao) {
+      throw erroPadrao;
+    }
+
+    return padrao?.email || fallback;
+  } catch (erro) {
+    console.warn('Falha ao buscar regra de cancelamento. Usando fallback seguro.', erro);
+    return fallback;
+  }
 }
 
 function montarUrlEmailCancelamento(params: {
@@ -300,9 +361,8 @@ export default function HistoricoCliente({
     null
   );
 
-  const emailCancelamento = useMemo(
-    () => obterEmailCancelamentoPorSegmento(clienteSegmento),
-    [clienteSegmento]
+  const [emailCancelamento, setEmailCancelamento] = useState(
+    obterEmailCancelamentoFallback(clienteSegmento)
   );
   const orcamentoDetalhadoRef =
     useRef<HistoricoOrcamentoAgrupado | null>(null);
@@ -325,6 +385,29 @@ export default function HistoricoCliente({
 
     return ordenarHistorico(filtrado, colunaOrdenacao, direcaoOrdenacao);
   }, [historicoAgrupado, statusFiltro, colunaOrdenacao, direcaoOrdenacao]);
+
+  useEffect(() => {
+    let ativo = true;
+
+    async function carregarEmailCancelamento() {
+      const fallback = obterEmailCancelamentoFallback(clienteSegmento);
+      setEmailCancelamento(fallback);
+
+      const emailConfigurado = await buscarEmailCancelamentoConfigurado(
+        clienteSegmento
+      );
+
+      if (ativo) {
+        setEmailCancelamento(emailConfigurado);
+      }
+    }
+
+    void carregarEmailCancelamento();
+
+    return () => {
+      ativo = false;
+    };
+  }, [clienteSegmento]);
 
   useEffect(() => {
     historicoAgrupadoRef.current = historicoAgrupado;

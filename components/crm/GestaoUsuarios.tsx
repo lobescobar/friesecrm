@@ -6,6 +6,7 @@ import { Profile } from '../../types';
 import { ESTADOS_BRASIL, SEGMENTOS_CLIENTES } from '../../utils/constants';
 import { valorLista } from '../../utils/validators';
 import Button from '../ui/Button';
+import RegrasCancelamentoOrcamentos from './admin/RegrasCancelamentoOrcamentos';
 
 type GestaoUsuariosProps = {
   segmentosDisponiveis?: string[];
@@ -237,7 +238,10 @@ export default function GestaoUsuarios({
   }
 
   return (
-    <section className="mt-4 overflow-hidden rounded-2xl border bg-white shadow-sm">
+    <>
+      <RegrasCancelamentoOrcamentos segmentosDisponiveis={segmentos} />
+
+      <section className="mt-4 overflow-hidden rounded-2xl border bg-white shadow-sm">
       <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-6 py-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-lg font-bold">Gestão de Usuários e Alçadas</h2>
@@ -500,6 +504,7 @@ export default function GestaoUsuarios({
           </div>
         </div>
       ) : null}
-    </section>
+      </section>
+    </>
   );
 }
