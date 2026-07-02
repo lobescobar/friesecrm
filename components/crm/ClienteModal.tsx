@@ -31,6 +31,7 @@ type ClienteModalProps = {
     cargo?: string;
     telefone?: string;
     email?: string;
+    endereco_visita?: string;
   }) => Promise<Contato | null>;
   onAtualizarContato: (
     id: string,

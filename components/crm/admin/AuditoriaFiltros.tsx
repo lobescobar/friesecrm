@@ -1,3 +1,5 @@
+'use client';
+
 import { FiltrosAuditoria } from '../../../hooks/useAuditoria';
 import Button from '../../ui/Button';
 
@@ -6,23 +8,38 @@ type AuditoriaFiltrosProps = {
   tabelas: string[];
   acoes: string[];
   origens: string[];
-  loading: boolean;
+  loading?: boolean;
   onChange: (filtros: FiltrosAuditoria) => void;
-  onAtualizar: () => void;
+  onAtualizar?: () => void;
 };
 
-const limites = [50, 100, 200, 500];
+const filtrosLimpos: FiltrosAuditoria = {
+  dataInicio: '',
+  dataFim: '',
+  usuario: '',
+  tabela: '',
+  acao: '',
+  origem: '',
+  busca: '',
+  limite: 500
+};
+
+function valorSelectTodas(valor: string) {
+  return valor || '';
+}
 
 export default function AuditoriaFiltros({
   filtros,
   tabelas,
   acoes,
   origens,
-  loading,
-  onChange,
-  onAtualizar
+  loading = false,
+  onChange
 }: AuditoriaFiltrosProps) {
-  function atualizar(campo: keyof FiltrosAuditoria, valor: string | number) {
+  function alterarFiltro<K extends keyof FiltrosAuditoria>(
+    campo: K,
+    valor: FiltrosAuditoria[K]
+  ) {
     onChange({
       ...filtros,
       [campo]: valor
@@ -31,65 +48,67 @@ export default function AuditoriaFiltros({
 
   function limparFiltros() {
     onChange({
-      dataInicio: '',
-      dataFim: '',
-      usuario: '',
-      tabela: '',
-      acao: '',
-      origem: '',
-      busca: '',
-      limite: 200
+      ...filtrosLimpos,
+      limite: filtros.limite || filtrosLimpos.limite
     });
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="grid gap-3 lg:grid-cols-6">
-        <label className="space-y-1 text-sm">
-          <span className="text-[10px] font-bold uppercase text-slate-400">
+        <label className="block">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
             Data inicial
           </span>
           <input
             type="date"
             value={filtros.dataInicio}
-            onChange={(event) => atualizar('dataInicio', event.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+            disabled={loading}
+            onChange={(event) =>
+              alterarFiltro('dataInicio', event.target.value)
+            }
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
           />
         </label>
 
-        <label className="space-y-1 text-sm">
-          <span className="text-[10px] font-bold uppercase text-slate-400">
+        <label className="block">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
             Data final
           </span>
           <input
             type="date"
             value={filtros.dataFim}
-            onChange={(event) => atualizar('dataFim', event.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+            disabled={loading}
+            onChange={(event) => alterarFiltro('dataFim', event.target.value)}
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
           />
         </label>
 
-        <label className="space-y-1 text-sm">
-          <span className="text-[10px] font-bold uppercase text-slate-400">
+        <label className="block">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
             Usuário
           </span>
           <input
-            type="search"
+            type="text"
             value={filtros.usuario}
-            onChange={(event) => atualizar('usuario', event.target.value)}
+            disabled={loading}
+            onChange={(event) => alterarFiltro('usuario', event.target.value)}
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
             placeholder="email"
-            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
           />
         </label>
 
-        <label className="space-y-1 text-sm">
-          <span className="text-[10px] font-bold uppercase text-slate-400">
+        <label className="block">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
             Tabela
           </span>
           <select
             value={filtros.tabela}
-            onChange={(event) => atualizar('tabela', event.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+            disabled={loading}
+            onChange={(event) =>
+              alterarFiltro('tabela', valorSelectTodas(event.target.value))
+            }
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
           >
             <option value="">Todas</option>
             {tabelas.map((tabela) => (
@@ -100,14 +119,17 @@ export default function AuditoriaFiltros({
           </select>
         </label>
 
-        <label className="space-y-1 text-sm">
-          <span className="text-[10px] font-bold uppercase text-slate-400">
+        <label className="block">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
             Ação
           </span>
           <select
             value={filtros.acao}
-            onChange={(event) => atualizar('acao', event.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+            disabled={loading}
+            onChange={(event) =>
+              alterarFiltro('acao', valorSelectTodas(event.target.value))
+            }
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
           >
             <option value="">Todas</option>
             {acoes.map((acao) => (
@@ -118,14 +140,17 @@ export default function AuditoriaFiltros({
           </select>
         </label>
 
-        <label className="space-y-1 text-sm">
-          <span className="text-[10px] font-bold uppercase text-slate-400">
+        <label className="block">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
             Origem
           </span>
           <select
             value={filtros.origem}
-            onChange={(event) => atualizar('origem', event.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+            disabled={loading}
+            onChange={(event) =>
+              alterarFiltro('origem', valorSelectTodas(event.target.value))
+            }
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
           >
             <option value="">Todas</option>
             {origens.map((origem) => (
@@ -137,45 +162,49 @@ export default function AuditoriaFiltros({
         </label>
       </div>
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_160px_auto_auto] lg:items-end">
-        <label className="space-y-1 text-sm">
-          <span className="text-[10px] font-bold uppercase text-slate-400">
+      <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_auto] lg:items-end">
+        <label className="block">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
             Busca geral
           </span>
           <input
-            type="search"
+            type="text"
             value={filtros.busca}
-            onChange={(event) => atualizar('busca', event.target.value)}
-            placeholder="cliente, código, arquivo, registro ou detalhe"
-            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+            disabled={loading}
+            onChange={(event) => alterarFiltro('busca', event.target.value)}
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+            placeholder="buscar por texto"
           />
         </label>
 
-        <label className="space-y-1 text-sm">
-          <span className="text-[10px] font-bold uppercase text-slate-400">
+        <label className="block">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
             Limite
           </span>
           <select
-            value={filtros.limite}
-            onChange={(event) => atualizar('limite', Number(event.target.value))}
-            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+            value={String(filtros.limite || 500)}
+            disabled={loading}
+            onChange={(event) =>
+              alterarFiltro('limite', Number(event.target.value))
+            }
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
           >
-            {limites.map((limite) => (
-              <option key={limite} value={limite}>
-                {limite}
-              </option>
-            ))}
+            <option value="100">100</option>
+            <option value="200">200</option>
+            <option value="500">500</option>
+            <option value="1000">1000</option>
           </select>
         </label>
 
-        <Button type="button" variant="secondary" onClick={limparFiltros}>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={limparFiltros}
+          disabled={loading}
+        >
           Limpar
         </Button>
-
-        <Button type="button" onClick={onAtualizar} disabled={loading}>
-          {loading ? 'Atualizando...' : 'Atualizar'}
-        </Button>
       </div>
-    </div>
+    </section>
   );
 }

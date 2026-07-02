@@ -371,15 +371,6 @@ export default function RegrasCancelamentoOrcamentos({
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
-              variant="secondary"
-              onClick={carregarRegras}
-              disabled={salvando}
-            >
-              Atualizar
-            </Button>
-
-            <Button
-              type="button"
               onClick={() => setCriando((atual) => !atual)}
               disabled={salvando}
             >

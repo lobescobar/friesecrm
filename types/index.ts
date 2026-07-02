@@ -27,6 +27,7 @@ export interface Contato {
   cargo?: string | null;
   telefone?: string | null;
   email?: string | null;
+  endereco_visita?: string | null;
   principal?: boolean | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -75,6 +76,7 @@ export interface HistoricoOrcamento {
   created_at?: string | null;
   updated_at?: string | null;
 }
+
 export type AuditLogAcao =
   | 'insert'
   | 'update'
@@ -98,4 +100,3 @@ export interface AuditLog {
   valor_novo?: Record<string, unknown> | null;
   detalhes: Record<string, unknown>;
 }
-

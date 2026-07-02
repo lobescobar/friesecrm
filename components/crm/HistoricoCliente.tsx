@@ -39,6 +39,34 @@ type HistoricoOrcamentoAgrupado = {
   itens: HistoricoOrcamento[];
 };
 
+type OrcamentoInteracao = {
+  id: string;
+  cliente_id: string;
+  numero_orcamento: string;
+  pedido_venda: string | null;
+  status_comercial: string | null;
+  responsavel_email: string | null;
+  observacao: string;
+  proximo_passo: string | null;
+  data_retorno: string | null;
+  criado_por: string | null;
+  criado_por_email: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type FormularioInteracaoOrcamento = {
+  observacao: string;
+  proximo_passo: string;
+  data_retorno: string;
+};
+
+const formularioInteracaoInicial: FormularioInteracaoOrcamento = {
+  observacao: '',
+  proximo_passo: '',
+  data_retorno: ''
+};
+
 const rotulosOrdenacao: Record<ColunaOrdenacao, string> = {
   numero_orcamento: 'Orçamento',
   data_emissao: 'Emissão',
@@ -56,6 +84,21 @@ function formatarData(data?: string | null) {
   }
 
   return data;
+}
+
+function formatarDataHora(data?: string | null) {
+  if (!data) return '-';
+
+  const dataConvertida = new Date(data);
+
+  if (Number.isNaN(dataConvertida.getTime())) {
+    return data;
+  }
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  }).format(dataConvertida);
 }
 
 function formatarQuantidade(valor?: number | null) {
@@ -341,7 +384,7 @@ export default function HistoricoCliente({
   orcamentoFocoInicial = null,
   onOrcamentoDetalheChange
 }: HistoricoClienteProps) {
-  const { historico, loading, error, carregarHistorico } = useHistoricoCliente(
+  const { historico, loading, error } = useHistoricoCliente(
     clienteId,
     aberto
   );
@@ -358,6 +401,19 @@ export default function HistoricoCliente({
   const [motivoCancelamento, setMotivoCancelamento] = useState('');
   const [erroCancelamento, setErroCancelamento] = useState<string | null>(null);
   const [mensagemCancelamento, setMensagemCancelamento] = useState<string | null>(
+    null
+  );
+  const [orcamentoHistoricoManual, setOrcamentoHistoricoManual] =
+    useState<HistoricoOrcamentoAgrupado | null>(null);
+  const [interacoesOrcamento, setInteracoesOrcamento] = useState<
+    OrcamentoInteracao[]
+  >([]);
+  const [formularioInteracao, setFormularioInteracao] =
+    useState<FormularioInteracaoOrcamento>(formularioInteracaoInicial);
+  const [carregandoInteracoes, setCarregandoInteracoes] = useState(false);
+  const [salvandoInteracao, setSalvandoInteracao] = useState(false);
+  const [erroInteracao, setErroInteracao] = useState<string | null>(null);
+  const [mensagemInteracao, setMensagemInteracao] = useState<string | null>(
     null
   );
 
@@ -528,6 +584,91 @@ export default function HistoricoCliente({
     onOrcamentoDetalheChange?.(null);
   };
 
+  const carregarInteracoesOrcamento = async (
+    item: HistoricoOrcamentoAgrupado
+  ) => {
+    setCarregandoInteracoes(true);
+    setErroInteracao(null);
+    setMensagemInteracao(null);
+
+    const { data, error: erroConsulta } = await supabase
+      .from('orcamentos_interacoes')
+      .select('*')
+      .eq('cliente_id', clienteId)
+      .eq('numero_orcamento', item.numero_orcamento)
+      .order('created_at', { ascending: false });
+
+    if (erroConsulta) {
+      setErroInteracao(
+        `Erro ao carregar histórico do orçamento: ${erroConsulta.message}`
+      );
+      setInteracoesOrcamento([]);
+      setCarregandoInteracoes(false);
+      return;
+    }
+
+    setInteracoesOrcamento((data || []) as OrcamentoInteracao[]);
+    setCarregandoInteracoes(false);
+  };
+
+  const abrirHistoricoManual = (item: HistoricoOrcamentoAgrupado) => {
+    setOrcamentoHistoricoManual(item);
+    setFormularioInteracao(formularioInteracaoInicial);
+    setInteracoesOrcamento([]);
+    setErroInteracao(null);
+    setMensagemInteracao(null);
+    void carregarInteracoesOrcamento(item);
+  };
+
+  const fecharHistoricoManual = () => {
+    setOrcamentoHistoricoManual(null);
+    setInteracoesOrcamento([]);
+    setFormularioInteracao(formularioInteracaoInicial);
+    setErroInteracao(null);
+    setMensagemInteracao(null);
+  };
+
+  const salvarInteracaoOrcamento = async () => {
+    if (!orcamentoHistoricoManual) return;
+
+    const observacao = formularioInteracao.observacao.trim();
+
+    if (observacao.length < 3) {
+      setErroInteracao(
+        'Informe uma observação com pelo menos 3 caracteres para salvar o histórico.'
+      );
+      return;
+    }
+
+    setSalvandoInteracao(true);
+    setErroInteracao(null);
+    setMensagemInteracao('Salvando histórico do orçamento...');
+
+    const { error: erroInsert } = await supabase
+      .from('orcamentos_interacoes')
+      .insert({
+        cliente_id: clienteId,
+        numero_orcamento: orcamentoHistoricoManual.numero_orcamento,
+        observacao,
+        proximo_passo: formularioInteracao.proximo_passo.trim() || null,
+        data_retorno: formularioInteracao.data_retorno || null,
+        criado_por: user?.id || null,
+        criado_por_email: profile?.email || user?.email || null
+      });
+
+    if (erroInsert) {
+      setErroInteracao(`Erro ao salvar histórico: ${erroInsert.message}`);
+      setMensagemInteracao(null);
+      setSalvandoInteracao(false);
+      return;
+    }
+
+    setMensagemInteracao('Histórico salvo com sucesso.');
+    setFormularioInteracao(formularioInteracaoInicial);
+    setSalvandoInteracao(false);
+    await carregarInteracoesOrcamento(orcamentoHistoricoManual);
+  };
+
   const abrirSolicitacaoCancelamento = (item: HistoricoOrcamentoAgrupado) => {
     setOrcamentoCancelamento(item);
     setMotivoCancelamento('');
@@ -590,15 +731,6 @@ export default function HistoricoCliente({
             </p>
           ) : null}
         </div>
-
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={carregarHistorico}
-          disabled={loading}
-        >
-          Atualizar
-        </Button>
       </div>
 
       {mensagemCancelamento ? (
@@ -808,6 +940,7 @@ export default function HistoricoCliente({
                         </button>
                       </th>
                       <th className="px-4 py-3 text-left">Status</th>
+                      <th className="px-4 py-3 text-right">Ações</th>
                     </tr>
                   </thead>
 
@@ -848,6 +981,14 @@ export default function HistoricoCliente({
                               {item.status_descricao}
                             </span>
                           </td>
+                          <td className="px-4 py-3 text-right">
+                            <Button
+                              type="button"
+                              onClick={() => abrirHistoricoManual(item)}
+                            >
+                              Histórico
+                            </Button>
+                          </td>
 
                         </tr>
                       );
@@ -874,9 +1015,13 @@ export default function HistoricoCliente({
                           <p className="text-xs font-semibold uppercase text-slate-400">
                             Orçamento
                           </p>
-                          <p className="text-base font-bold text-blue-700">
+                          <button
+                            type="button"
+                            onClick={() => abrirDetalhes(item)}
+                            className="text-base font-bold text-blue-700 underline-offset-4 hover:underline"
+                          >
                             {item.numero_orcamento}
-                          </p>
+                          </button>
                         </div>
 
                         <span
@@ -920,11 +1065,10 @@ export default function HistoricoCliente({
                       <div className="mt-3">
                         <Button
                           type="button"
-                          variant="secondary"
                           className="w-full"
-                          onClick={() => abrirDetalhes(item)}
+                          onClick={() => abrirHistoricoManual(item)}
                         >
-                          Ver itens do orçamento
+                          Histórico
                         </Button>
                       </div>
                     </div>
@@ -940,7 +1084,7 @@ export default function HistoricoCliente({
         <p className="mt-4 text-xs text-slate-400">
           Ordenação atual: {rotulosOrdenacao[colunaOrdenacao]} /{' '}
           {direcaoOrdenacao === 'asc' ? 'crescente' : 'decrescente'}. Clique no
-          número do orçamento para visualizar os itens e descrições.
+          botão Histórico para registrar informações específicas do orçamento.
         </p>
       ) : null}
 
@@ -1074,6 +1218,207 @@ export default function HistoricoCliente({
                   </p>
                 </div>
               ))}
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+
+      {orcamentoHistoricoManual ? (
+        <Modal
+          title={`Histórico do orçamento ${orcamentoHistoricoManual.numero_orcamento}`}
+          subtitle="Registre contatos, observações, ações necessárias e lembretes específicos deste orçamento."
+          onClose={fecharHistoricoManual}
+          scrollKey={`historico-manual:${clienteId}:${orcamentoHistoricoManual.numero_orcamento}`}
+          footer={
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={fecharHistoricoManual}
+                disabled={salvandoInteracao}
+              >
+                Fechar
+              </Button>
+
+              <Button
+                type="button"
+                onClick={salvarInteracaoOrcamento}
+                disabled={salvandoInteracao}
+              >
+                {salvandoInteracao ? 'Salvando...' : 'Salvar registro'}
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-5">
+            <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm sm:grid-cols-3">
+              <div>
+                <p className="text-xs font-bold uppercase text-slate-400">
+                  Orçamento
+                </p>
+                <p className="font-semibold text-slate-900">
+                  {orcamentoHistoricoManual.numero_orcamento}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase text-slate-400">
+                  Emissão
+                </p>
+                <p className="font-semibold text-slate-900">
+                  {formatarData(orcamentoHistoricoManual.data_emissao)}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase text-slate-400">
+                  Status ERP
+                </p>
+                <span
+                  className={`mt-1 inline-flex rounded-full border px-2 py-1 text-xs font-bold ${obterClasseStatus(
+                    orcamentoHistoricoManual.status
+                  )}`}
+                >
+                  {orcamentoHistoricoManual.status_descricao}
+                </span>
+              </div>
+            </div>
+
+            {mensagemInteracao ? (
+              <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm font-medium text-blue-800">
+                {mensagemInteracao}
+              </div>
+            ) : null}
+
+            {erroInteracao ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
+                {erroInteracao}
+              </div>
+            ) : null}
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <h5 className="text-sm font-bold text-slate-900">
+                Novo registro
+              </h5>
+
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <label className="block text-sm font-semibold text-slate-700 sm:col-span-2">
+                  Observação do orçamento
+                  <textarea
+                    value={formularioInteracao.observacao}
+                    onChange={(event) =>
+                      setFormularioInteracao({
+                        ...formularioInteracao,
+                        observacao: event.target.value
+                      })
+                    }
+                    rows={4}
+                    className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-slate-500"
+                    placeholder="Digite o histórico, contato feito, pendência ou informação específica deste orçamento..."
+                  />
+                </label>
+
+                <label className="block text-sm font-semibold text-slate-700">
+                  Ação necessária
+                  <input
+                    type="text"
+                    value={formularioInteracao.proximo_passo}
+                    onChange={(event) =>
+                      setFormularioInteracao({
+                        ...formularioInteracao,
+                        proximo_passo: event.target.value
+                      })
+                    }
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-slate-500"
+                    placeholder="Ex.: Retornar para o cliente, enviar proposta revisada ou confirmar aprovação"
+                  />
+                </label>
+
+                <label className="block text-sm font-semibold text-slate-700">
+                  Lembrete
+                  <input
+                    type="date"
+                    value={formularioInteracao.data_retorno}
+                    onChange={(event) =>
+                      setFormularioInteracao({
+                        ...formularioInteracao,
+                        data_retorno: event.target.value
+                      })
+                    }
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-slate-500"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <h5 className="text-sm font-bold text-slate-900">
+                Registros salvos
+              </h5>
+
+              {carregandoInteracoes ? (
+                <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                  <LoadingSpinner label="Carregando registros do orçamento..." />
+                </div>
+              ) : null}
+
+              {!carregandoInteracoes && interacoesOrcamento.length === 0 ? (
+                <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
+                  Ainda não há registros manuais para este orçamento.
+                </div>
+              ) : null}
+
+              {!carregandoInteracoes && interacoesOrcamento.length > 0 ? (
+                <div className="mt-4 space-y-3">
+                  {interacoesOrcamento.map((interacao) => (
+                    <article
+                      key={interacao.id}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm"
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="font-bold text-slate-900">
+                            Registro do orçamento
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {formatarDataHora(interacao.created_at)}
+                            {interacao.criado_por_email
+                              ? ` por ${interacao.criado_por_email}`
+                              : ''}
+                          </p>
+                        </div>
+
+                      </div>
+
+                      <p className="mt-3 whitespace-pre-wrap text-slate-700">
+                        {interacao.observacao}
+                      </p>
+
+                      {interacao.proximo_passo || interacao.data_retorno ? (
+                        <div className="mt-3 grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2">
+                          <div>
+                            <p className="text-xs font-bold uppercase text-slate-400">
+                              Ação necessária
+                            </p>
+                            <p className="font-medium text-slate-700">
+                              {interacao.proximo_passo || '-'}
+                            </p>
+                          </div>
+
+                          <div>
+                            <p className="text-xs font-bold uppercase text-slate-400">
+                              Lembrete
+                            </p>
+                            <p className="font-medium text-slate-700">
+                              {formatarData(interacao.data_retorno)}
+                            </p>
+                          </div>
+                        </div>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         </Modal>

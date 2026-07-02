@@ -11,6 +11,7 @@ type FormContato = {
   cargo: string;
   telefone: string;
   email: string;
+  endereco_visita: string;
 };
 
 type ContatosClienteProps = {
@@ -24,6 +25,7 @@ type ContatosClienteProps = {
     cargo?: string;
     telefone?: string;
     email?: string;
+    endereco_visita?: string;
   }) => Promise<Contato | null>;
   onAtualizar: (id: string, dados: Partial<Contato>) => Promise<Contato | null>;
   onExcluir: (id: string) => Promise<boolean>;
@@ -33,7 +35,8 @@ const formularioInicial: FormContato = {
   nome: '',
   cargo: '',
   telefone: '',
-  email: ''
+  email: '',
+  endereco_visita: ''
 };
 
 export default function ContatosCliente({
@@ -78,7 +81,8 @@ export default function ContatosCliente({
       nome: novoContato.nome.trim(),
       cargo: novoContato.cargo.trim() || undefined,
       telefone: novoContato.telefone.trim() || undefined,
-      email: novoContato.email.trim() || undefined
+      email: novoContato.email.trim() || undefined,
+      endereco_visita: novoContato.endereco_visita.trim() || undefined
     });
 
     setSalvando(false);
@@ -97,7 +101,8 @@ export default function ContatosCliente({
       nome: contato.nome || '',
       cargo: contato.cargo || '',
       telefone: contato.telefone || '',
-      email: contato.email || ''
+      email: contato.email || '',
+      endereco_visita: contato.endereco_visita || ''
     });
     setMensagem(null);
   };
@@ -116,7 +121,8 @@ export default function ContatosCliente({
       nome: edicao.nome.trim(),
       cargo: edicao.cargo.trim() || null,
       telefone: edicao.telefone.trim() || null,
-      email: edicao.email.trim() || null
+      email: edicao.email.trim() || null,
+      endereco_visita: edicao.endereco_visita.trim() || null
     });
 
     setSalvando(false);
@@ -195,6 +201,24 @@ export default function ContatosCliente({
             className="rounded-xl border px-3 py-2 text-sm"
           />
         </div>
+
+        <label className="mt-3 block">
+          <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            Endereço de visita
+          </span>
+          <textarea
+            value={novoContato.endereco_visita}
+            onChange={(event) =>
+              setNovoContato({
+                ...novoContato,
+                endereco_visita: event.target.value
+              })
+            }
+            rows={2}
+            className="w-full rounded-xl border px-3 py-2 text-sm"
+            placeholder="Informe o endereço específico para visitar este contato"
+          />
+        </label>
 
         <Button
           type="button"
@@ -277,6 +301,24 @@ export default function ContatosCliente({
                       />
                     </div>
 
+                    <label className="block">
+                      <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                        Endereço de visita
+                      </span>
+                      <textarea
+                        value={edicao.endereco_visita}
+                        onChange={(event) =>
+                          setEdicao({
+                            ...edicao,
+                            endereco_visita: event.target.value
+                          })
+                        }
+                        rows={2}
+                        className="w-full rounded-xl border px-3 py-2 text-sm"
+                        placeholder="Informe o endereço específico para visitar este contato"
+                      />
+                    </label>
+
                     <div className="flex flex-wrap gap-2">
                       <Button
                         type="button"
@@ -311,6 +353,17 @@ export default function ContatosCliente({
 
                       {contato.email ? (
                         <p className="text-sm text-slate-600">{contato.email}</p>
+                      ) : null}
+
+                      {contato.endereco_visita ? (
+                        <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                            Endereço de visita
+                          </p>
+                          <p className="mt-1 whitespace-pre-line text-sm font-medium text-slate-700">
+                            {contato.endereco_visita}
+                          </p>
+                        </div>
                       ) : null}
                     </div>
 
