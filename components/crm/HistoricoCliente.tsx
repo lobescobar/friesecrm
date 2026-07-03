@@ -1,14 +1,33 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useHistoricoCliente } from '../../hooks/useHistoricoCliente';
 import { useAuth } from '../../hooks/useAuth';
-import { supabase } from '../../lib/supabase';
-import { HistoricoOrcamento } from '../../types';
+import { useHistoricoCliente } from '../../hooks/useHistoricoCliente';
+import { useInteracoesOrcamento } from '../../hooks/useInteracoesOrcamento';
+import type {
+  ColunaOrdenacao,
+  DirecaoOrdenacao,
+  HistoricoOrcamentoAgrupado,
+  StatusFiltro
+} from '../../types/historico';
 import { MESES_HISTORICO_ORCAMENTOS } from '../../utils/constants';
-import Button from '../ui/Button';
+import {
+  agruparPorNumeroPrincipal,
+  ordenarHistorico,
+  rotulosOrdenacao
+} from '../../utils/historicoOrcamentos';
+import {
+  buscarEmailCancelamentoConfigurado,
+  montarUrlEmailCancelamento,
+  obterEmailCancelamentoFallback
+} from '../../utils/cancelamentoOrcamentos';
 import LoadingSpinner from '../ui/LoadingSpinner';
-import Modal from '../ui/Modal';
+import HistoricoFiltros from './historico/HistoricoFiltros';
+import HistoricoResumoCards from './historico/HistoricoResumoCards';
+import ModalCancelamentoOrcamento from './historico/ModalCancelamentoOrcamento';
+import ModalHistoricoOrcamento from './historico/ModalHistoricoOrcamento';
+import ModalItensOrcamento from './historico/ModalItensOrcamento';
+import TabelaHistoricoOrcamentos from './historico/TabelaHistoricoOrcamentos';
 
 type HistoricoClienteProps = {
   clienteId: string;
@@ -18,365 +37,6 @@ type HistoricoClienteProps = {
   onOrcamentoDetalheChange?: (numeroOrcamento: string | null) => void;
 };
 
-type StatusFiltro = 'todos' | HistoricoOrcamento['status'];
-type ColunaOrdenacao =
-  | 'numero_orcamento'
-  | 'data_emissao'
-  | 'pedido_venda'
-  | 'data_fechamento';
-type DirecaoOrdenacao = 'asc' | 'desc';
-
-type HistoricoOrcamentoAgrupado = {
-  id: string;
-  chave: string;
-  data_emissao: string;
-  data_fechamento: string | null;
-  numero_orcamento: string;
-  pedido_venda: string | null;
-  status: HistoricoOrcamento['status'];
-  status_descricao: string;
-  quantidade_itens: number;
-  itens: HistoricoOrcamento[];
-};
-
-type OrcamentoInteracao = {
-  id: string;
-  cliente_id: string;
-  numero_orcamento: string;
-  pedido_venda: string | null;
-  status_comercial: string | null;
-  responsavel_email: string | null;
-  observacao: string;
-  proximo_passo: string | null;
-  data_retorno: string | null;
-  criado_por: string | null;
-  criado_por_email: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type FormularioInteracaoOrcamento = {
-  observacao: string;
-  proximo_passo: string;
-  data_retorno: string;
-};
-
-const formularioInteracaoInicial: FormularioInteracaoOrcamento = {
-  observacao: '',
-  proximo_passo: '',
-  data_retorno: ''
-};
-
-const rotulosOrdenacao: Record<ColunaOrdenacao, string> = {
-  numero_orcamento: 'Orçamento',
-  data_emissao: 'Emissão',
-  pedido_venda: 'Pedido de venda',
-  data_fechamento: 'Data de fechamento'
-};
-
-function formatarData(data?: string | null) {
-  if (!data) return '-';
-
-  const partes = data.split('-');
-
-  if (partes.length === 3) {
-    return `${partes[2]}/${partes[1]}/${partes[0]}`;
-  }
-
-  return data;
-}
-
-function formatarDataHora(data?: string | null) {
-  if (!data) return '-';
-
-  const dataConvertida = new Date(data);
-
-  if (Number.isNaN(dataConvertida.getTime())) {
-    return data;
-  }
-
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short'
-  }).format(dataConvertida);
-}
-
-function formatarQuantidade(valor?: number | null) {
-  if (valor === null || valor === undefined) {
-    return '-';
-  }
-
-  return new Intl.NumberFormat('pt-BR', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 3
-  }).format(valor);
-}
-
-function obterClasseStatus(status: HistoricoOrcamento['status']) {
-  if (status === 'A') {
-    return 'border-blue-200 bg-blue-50 text-blue-700';
-  }
-
-  if (status === 'B') {
-    return 'border-green-200 bg-green-50 text-green-700';
-  }
-
-  return 'border-red-200 bg-red-50 text-red-700';
-}
-
-function obterDescricaoStatus(status: HistoricoOrcamento['status']) {
-  if (status === 'A') return 'Aberto';
-  if (status === 'B') return 'Fechado';
-  return 'Cancelado';
-}
-
-const EMAIL_CANCELAMENTO_PADRAO = 'vendas.ai@friese.com.br';
-const EMAIL_CANCELAMENTO_CORRUGADOS = 'vendas.cr@friese.com.br';
-
-type EmailCancelamentoConsulta = {
-  email: string;
-};
-
-type RegraCancelamentoConsulta = {
-  email_cancelamento_id: string | null;
-};
-
-function normalizarSegmentoCancelamento(segmento?: string | null) {
-  return (segmento || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase();
-}
-
-function obterEmailCancelamentoFallback(segmento?: string | null) {
-  const segmentoNormalizado = normalizarSegmentoCancelamento(segmento);
-
-  if (segmentoNormalizado === 'corrugados') {
-    return EMAIL_CANCELAMENTO_CORRUGADOS;
-  }
-
-  return EMAIL_CANCELAMENTO_PADRAO;
-}
-
-async function buscarEmailCancelamentoConfigurado(segmento?: string | null) {
-  const fallback = obterEmailCancelamentoFallback(segmento);
-  const segmentoNormalizado = normalizarSegmentoCancelamento(segmento);
-
-  try {
-    if (segmentoNormalizado) {
-      const { data: regra, error: erroRegra } = await supabase
-        .from('regras_cancelamento_segmentos')
-        .select('email_cancelamento_id')
-        .eq('segmento_normalizado', segmentoNormalizado)
-        .maybeSingle<RegraCancelamentoConsulta>();
-
-      if (erroRegra) {
-        throw erroRegra;
-      }
-
-      if (regra?.email_cancelamento_id) {
-        const { data: destino, error: erroDestino } = await supabase
-          .from('emails_cancelamento_orcamentos')
-          .select('email')
-          .eq('id', regra.email_cancelamento_id)
-          .eq('ativo', true)
-          .maybeSingle<EmailCancelamentoConsulta>();
-
-        if (erroDestino) {
-          throw erroDestino;
-        }
-
-        if (destino?.email) {
-          return destino.email;
-        }
-      }
-    }
-
-    const { data: padrao, error: erroPadrao } = await supabase
-      .from('emails_cancelamento_orcamentos')
-      .select('email')
-      .eq('ativo', true)
-      .eq('padrao', true)
-      .maybeSingle<EmailCancelamentoConsulta>();
-
-    if (erroPadrao) {
-      throw erroPadrao;
-    }
-
-    return padrao?.email || fallback;
-  } catch (erro) {
-    console.warn('Falha ao buscar regra de cancelamento. Usando fallback seguro.', erro);
-    return fallback;
-  }
-}
-
-function montarUrlEmailCancelamento(params: {
-  numeroOrcamento: string;
-  solicitante: string;
-  motivo: string;
-  destinatario: string;
-  segmentoCliente?: string | null;
-}) {
-  const assunto = `Solicitação de cancelamento do orçamento ${params.numeroOrcamento}`;
-  const corpo = [
-    'Favor cancelar o orçamento a seguir.',
-    '',
-    `Número do orçamento: ${params.numeroOrcamento}`,
-    `Segmento do cliente: ${params.segmentoCliente || '-'}`,
-    `Vendedor/Solicitante CRM: ${params.solicitante}`,
-    `Motivo: ${params.motivo}`,
-    '',
-    'Solicitação enviada pelo Painel comercial.'
-  ].join('\n');
-
-  return `mailto:${params.destinatario}?subject=${encodeURIComponent(
-    assunto
-  )}&body=${encodeURIComponent(corpo)}`;
-}
-
-function escolherStatus(
-  statusAtual: HistoricoOrcamento['status'],
-  novoStatus: HistoricoOrcamento['status']
-) {
-  const prioridade: Record<HistoricoOrcamento['status'], number> = {
-    B: 3,
-    A: 2,
-    C: 1
-  };
-
-  return prioridade[novoStatus] > prioridade[statusAtual]
-    ? novoStatus
-    : statusAtual;
-}
-
-function escolherDataFechamento(
-  dataAtual?: string | null,
-  novaData?: string | null
-) {
-  if (!dataAtual) return novaData || null;
-  if (!novaData) return dataAtual;
-
-  return novaData > dataAtual ? novaData : dataAtual;
-}
-
-function escolherPedidoVenda(
-  pedidoAtual?: string | null,
-  novoPedido?: string | null
-) {
-  if (pedidoAtual) return pedidoAtual;
-  if (novoPedido) return novoPedido;
-
-  return null;
-}
-
-function ordenarItensOrcamento(itens: HistoricoOrcamento[]) {
-  return [...itens].sort((a, b) =>
-    a.numero_it_completo.localeCompare(b.numero_it_completo, 'pt-BR', {
-      numeric: true,
-      sensitivity: 'base'
-    })
-  );
-}
-
-function agruparPorNumeroPrincipal(
-  historico: HistoricoOrcamento[]
-): HistoricoOrcamentoAgrupado[] {
-  const mapa = new Map<string, HistoricoOrcamentoAgrupado>();
-
-  historico.forEach((item) => {
-    const chave = `${item.codigo_cliente_loja}|${item.numero_orcamento}`;
-    const existente = mapa.get(chave);
-
-    if (!existente) {
-      mapa.set(chave, {
-        id: item.id,
-        chave,
-        data_emissao: item.data_emissao,
-        data_fechamento: item.data_fechamento || null,
-        numero_orcamento: item.numero_orcamento,
-        pedido_venda: item.pedido_venda || null,
-        status: item.status,
-        status_descricao: obterDescricaoStatus(item.status),
-        quantidade_itens: 1,
-        itens: [item]
-      });
-      return;
-    }
-
-    const statusEscolhido = escolherStatus(existente.status, item.status);
-    const itens = ordenarItensOrcamento([...existente.itens, item]);
-
-    mapa.set(chave, {
-      ...existente,
-      data_emissao:
-        item.data_emissao > existente.data_emissao
-          ? item.data_emissao
-          : existente.data_emissao,
-      data_fechamento: escolherDataFechamento(
-        existente.data_fechamento,
-        item.data_fechamento
-      ),
-      pedido_venda: escolherPedidoVenda(existente.pedido_venda, item.pedido_venda),
-      status: statusEscolhido,
-      status_descricao: obterDescricaoStatus(statusEscolhido),
-      quantidade_itens: itens.length,
-      itens
-    });
-  });
-
-  return Array.from(mapa.values());
-}
-
-function compararTexto(a: string | null, b: string | null) {
-  return (a || '').localeCompare(b || '', 'pt-BR', {
-    numeric: true,
-    sensitivity: 'base'
-  });
-}
-
-function compararDatas(a: string | null, b: string | null) {
-  if (!a && !b) return 0;
-  if (!a) return 1;
-  if (!b) return -1;
-
-  return a.localeCompare(b);
-}
-
-function ordenarHistorico(
-  lista: HistoricoOrcamentoAgrupado[],
-  coluna: ColunaOrdenacao,
-  direcao: DirecaoOrdenacao
-) {
-  const multiplicador = direcao === 'asc' ? 1 : -1;
-
-  return [...lista].sort((a, b) => {
-    let comparacao = 0;
-
-    if (coluna === 'numero_orcamento') {
-      comparacao = compararTexto(a.numero_orcamento, b.numero_orcamento);
-    }
-
-    if (coluna === 'data_emissao') {
-      comparacao = compararDatas(a.data_emissao, b.data_emissao);
-    }
-
-    if (coluna === 'pedido_venda') {
-      comparacao = compararTexto(a.pedido_venda, b.pedido_venda);
-    }
-
-    if (coluna === 'data_fechamento') {
-      comparacao = compararDatas(a.data_fechamento, b.data_fechamento);
-    }
-
-    if (comparacao === 0) {
-      comparacao = compararTexto(a.numero_orcamento, b.numero_orcamento);
-    }
-
-    return comparacao * multiplicador;
-  });
-}
-
 export default function HistoricoCliente({
   clienteId,
   aberto,
@@ -384,11 +44,11 @@ export default function HistoricoCliente({
   orcamentoFocoInicial = null,
   onOrcamentoDetalheChange
 }: HistoricoClienteProps) {
-  const { historico, loading, error } = useHistoricoCliente(
-    clienteId,
-    aberto
-  );
+  const { historico, loading, error } = useHistoricoCliente(clienteId, aberto);
   const { user, profile } = useAuth();
+
+  const usuarioEmail = profile?.email || user?.email || null;
+
   const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>('todos');
   const [colunaOrdenacao, setColunaOrdenacao] =
     useState<ColunaOrdenacao>('data_emissao');
@@ -398,35 +58,38 @@ export default function HistoricoCliente({
     useState<HistoricoOrcamentoAgrupado | null>(null);
   const [orcamentoCancelamento, setOrcamentoCancelamento] =
     useState<HistoricoOrcamentoAgrupado | null>(null);
+  const [orcamentoHistoricoManual, setOrcamentoHistoricoManual] =
+    useState<HistoricoOrcamentoAgrupado | null>(null);
   const [motivoCancelamento, setMotivoCancelamento] = useState('');
   const [erroCancelamento, setErroCancelamento] = useState<string | null>(null);
   const [mensagemCancelamento, setMensagemCancelamento] = useState<string | null>(
     null
   );
-  const [orcamentoHistoricoManual, setOrcamentoHistoricoManual] =
-    useState<HistoricoOrcamentoAgrupado | null>(null);
-  const [interacoesOrcamento, setInteracoesOrcamento] = useState<
-    OrcamentoInteracao[]
-  >([]);
-  const [formularioInteracao, setFormularioInteracao] =
-    useState<FormularioInteracaoOrcamento>(formularioInteracaoInicial);
-  const [carregandoInteracoes, setCarregandoInteracoes] = useState(false);
-  const [salvandoInteracao, setSalvandoInteracao] = useState(false);
-  const [erroInteracao, setErroInteracao] = useState<string | null>(null);
-  const [mensagemInteracao, setMensagemInteracao] = useState<string | null>(
-    null
-  );
-
   const [emailCancelamento, setEmailCancelamento] = useState(
     obterEmailCancelamentoFallback(clienteSegmento)
   );
+
+  const {
+    interacoesOrcamento,
+    formularioInteracao,
+    setFormularioInteracao,
+    carregandoInteracoes,
+    salvandoInteracao,
+    erroInteracao,
+    mensagemInteracao,
+    carregarInteracoesOrcamento,
+    limparInteracoesOrcamento,
+    salvarInteracaoOrcamento
+  } = useInteracoesOrcamento({
+    clienteId,
+    usuarioId: user?.id || null,
+    usuarioEmail
+  });
+
   const orcamentoDetalhadoRef =
     useRef<HistoricoOrcamentoAgrupado | null>(null);
-  const historicoAgrupadoRef =
-    useRef<HistoricoOrcamentoAgrupado[]>([]);
-  const orcamentoFocoInicialRef = useRef<string | null>(
-    orcamentoFocoInicial
-  );
+  const historicoAgrupadoRef = useRef<HistoricoOrcamentoAgrupado[]>([]);
+  const orcamentoFocoInicialRef = useRef<string | null>(orcamentoFocoInicial);
 
   const historicoAgrupado = useMemo(
     () => agruparPorNumeroPrincipal(historico),
@@ -441,6 +104,15 @@ export default function HistoricoCliente({
 
     return ordenarHistorico(filtrado, colunaOrdenacao, direcaoOrdenacao);
   }, [historicoAgrupado, statusFiltro, colunaOrdenacao, direcaoOrdenacao]);
+
+  const resumo = useMemo(() => {
+    return {
+      total: historicoAgrupado.length,
+      abertos: historicoAgrupado.filter((item) => item.status === 'A').length,
+      fechados: historicoAgrupado.filter((item) => item.status === 'B').length,
+      cancelados: historicoAgrupado.filter((item) => item.status === 'C').length
+    };
+  }, [historicoAgrupado]);
 
   useEffect(() => {
     let ativo = true;
@@ -476,15 +148,6 @@ export default function HistoricoCliente({
   useEffect(() => {
     orcamentoFocoInicialRef.current = orcamentoFocoInicial;
   }, [orcamentoFocoInicial]);
-
-  const resumo = useMemo(() => {
-    return {
-      total: historicoAgrupado.length,
-      abertos: historicoAgrupado.filter((item) => item.status === 'A').length,
-      fechados: historicoAgrupado.filter((item) => item.status === 'B').length,
-      cancelados: historicoAgrupado.filter((item) => item.status === 'C').length
-    };
-  }, [historicoAgrupado]);
 
   useEffect(() => {
     if (!orcamentoFocoInicial) {
@@ -568,12 +231,6 @@ export default function HistoricoCliente({
     setDirecaoOrdenacao(coluna.includes('data') ? 'desc' : 'asc');
   };
 
-  const iconeOrdenacao = (coluna: ColunaOrdenacao) => {
-    if (colunaOrdenacao !== coluna) return '↕';
-
-    return direcaoOrdenacao === 'asc' ? '↑' : '↓';
-  };
-
   const abrirDetalhes = (item: HistoricoOrcamentoAgrupado) => {
     setOrcamentoDetalhado(item);
     onOrcamentoDetalheChange?.(item.numero_orcamento);
@@ -584,89 +241,22 @@ export default function HistoricoCliente({
     onOrcamentoDetalheChange?.(null);
   };
 
-  const carregarInteracoesOrcamento = async (
-    item: HistoricoOrcamentoAgrupado
-  ) => {
-    setCarregandoInteracoes(true);
-    setErroInteracao(null);
-    setMensagemInteracao(null);
-
-    const { data, error: erroConsulta } = await supabase
-      .from('orcamentos_interacoes')
-      .select('*')
-      .eq('cliente_id', clienteId)
-      .eq('numero_orcamento', item.numero_orcamento)
-      .order('created_at', { ascending: false });
-
-    if (erroConsulta) {
-      setErroInteracao(
-        `Erro ao carregar histórico do orçamento: ${erroConsulta.message}`
-      );
-      setInteracoesOrcamento([]);
-      setCarregandoInteracoes(false);
-      return;
-    }
-
-    setInteracoesOrcamento((data || []) as OrcamentoInteracao[]);
-    setCarregandoInteracoes(false);
-  };
-
   const abrirHistoricoManual = (item: HistoricoOrcamentoAgrupado) => {
     setOrcamentoHistoricoManual(item);
-    setFormularioInteracao(formularioInteracaoInicial);
-    setInteracoesOrcamento([]);
-    setErroInteracao(null);
-    setMensagemInteracao(null);
+    limparInteracoesOrcamento();
     void carregarInteracoesOrcamento(item);
   };
 
   const fecharHistoricoManual = () => {
     setOrcamentoHistoricoManual(null);
-    setInteracoesOrcamento([]);
-    setFormularioInteracao(formularioInteracaoInicial);
-    setErroInteracao(null);
-    setMensagemInteracao(null);
+    limparInteracoesOrcamento();
   };
 
-  const salvarInteracaoOrcamento = async () => {
-    if (!orcamentoHistoricoManual) return;
-
-    const observacao = formularioInteracao.observacao.trim();
-
-    if (observacao.length < 3) {
-      setErroInteracao(
-        'Informe uma observação com pelo menos 3 caracteres para salvar o histórico.'
-      );
-      return;
-    }
-
-    setSalvandoInteracao(true);
-    setErroInteracao(null);
-    setMensagemInteracao('Salvando histórico do orçamento...');
-
-    const { error: erroInsert } = await supabase
-      .from('orcamentos_interacoes')
-      .insert({
-        cliente_id: clienteId,
-        numero_orcamento: orcamentoHistoricoManual.numero_orcamento,
-        observacao,
-        proximo_passo: formularioInteracao.proximo_passo.trim() || null,
-        data_retorno: formularioInteracao.data_retorno || null,
-        criado_por: user?.id || null,
-        criado_por_email: profile?.email || user?.email || null
-      });
-
-    if (erroInsert) {
-      setErroInteracao(`Erro ao salvar histórico: ${erroInsert.message}`);
-      setMensagemInteracao(null);
-      setSalvandoInteracao(false);
-      return;
-    }
-
-    setMensagemInteracao('Histórico salvo com sucesso.');
-    setFormularioInteracao(formularioInteracaoInicial);
-    setSalvandoInteracao(false);
-    await carregarInteracoesOrcamento(orcamentoHistoricoManual);
+  const salvarHistoricoManual = () => {
+    void salvarInteracaoOrcamento(
+      orcamentoHistoricoManual,
+      formularioInteracao
+    );
   };
 
   const abrirSolicitacaoCancelamento = (item: HistoricoOrcamentoAgrupado) => {
@@ -694,8 +284,7 @@ export default function HistoricoCliente({
       return;
     }
 
-    const solicitante =
-      profile?.email || user?.email || 'Usuário não identificado no CRM';
+    const solicitante = usuarioEmail || 'Usuário não identificado no CRM';
 
     window.location.href = montarUrlEmailCancelamento({
       numeroOrcamento: orcamentoCancelamento.numero_orcamento,
@@ -723,7 +312,8 @@ export default function HistoricoCliente({
             Histórico do Cliente
           </h4>
           <p className="mt-1 text-sm text-slate-500">
-            Orçamentos dos últimos {MESES_HISTORICO_ORCAMENTOS} meses agrupados pelo número principal.
+            Orçamentos dos últimos {MESES_HISTORICO_ORCAMENTOS} meses agrupados
+            pelo número principal.
           </p>
           {orcamentoFocoInicial ? (
             <p className="mt-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800">
@@ -734,7 +324,10 @@ export default function HistoricoCliente({
       </div>
 
       {mensagemCancelamento ? (
-        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-800">
+        <div
+          role="status"
+          className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-800"
+        >
           {mensagemCancelamento}
         </div>
       ) : null}
@@ -746,336 +339,63 @@ export default function HistoricoCliente({
       ) : null}
 
       {error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div
+          role="alert"
+          className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+        >
           <strong>Erro ao carregar histórico.</strong>
           <p className="mt-1">{error}</p>
         </div>
       ) : null}
 
       {!loading && !error && historicoAgrupado.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
-          Ainda não há orçamentos importados para este cliente nos últimos {MESES_HISTORICO_ORCAMENTOS}
-          meses.
+        <div
+          role="status"
+          className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600"
+        >
+          Ainda não há orçamentos importados para este cliente nos últimos{' '}
+          {MESES_HISTORICO_ORCAMENTOS} meses.
         </div>
       ) : null}
 
       {!loading && !error && historicoAgrupado.length > 0 ? (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <button
-              type="button"
-              onClick={() => setStatusFiltro('todos')}
-              className={`rounded-2xl p-4 text-left transition ${
-                statusFiltro === 'todos'
-                  ? 'ring-2 ring-slate-500'
-                  : 'bg-slate-50 hover:bg-slate-100'
-              }`}
-            >
-              <p className="text-xs font-semibold uppercase text-slate-400">
-                Total
-              </p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">
-                {resumo.total}
-              </p>
-            </button>
+          <HistoricoResumoCards
+            resumo={resumo}
+            statusFiltro={statusFiltro}
+            onStatusFiltroChange={setStatusFiltro}
+          />
 
-            <button
-              type="button"
-              onClick={() => setStatusFiltro('A')}
-              className={`rounded-2xl p-4 text-left transition ${
-                statusFiltro === 'A'
-                  ? 'ring-2 ring-blue-500'
-                  : 'bg-blue-50 hover:bg-blue-100'
-              }`}
-            >
-              <p className="text-xs font-semibold uppercase text-blue-500">
-                Abertos
-              </p>
-              <p className="mt-1 text-2xl font-bold text-blue-700">
-                {resumo.abertos}
-              </p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setStatusFiltro('B')}
-              className={`rounded-2xl p-4 text-left transition ${
-                statusFiltro === 'B'
-                  ? 'ring-2 ring-green-500'
-                  : 'bg-green-50 hover:bg-green-100'
-              }`}
-            >
-              <p className="text-xs font-semibold uppercase text-green-500">
-                Fechados
-              </p>
-              <p className="mt-1 text-2xl font-bold text-green-700">
-                {resumo.fechados}
-              </p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setStatusFiltro('C')}
-              className={`rounded-2xl p-4 text-left transition ${
-                statusFiltro === 'C'
-                  ? 'ring-2 ring-red-500'
-                  : 'bg-red-50 hover:bg-red-100'
-              }`}
-            >
-              <p className="text-xs font-semibold uppercase text-red-500">
-                Cancelados
-              </p>
-              <p className="mt-1 text-2xl font-bold text-red-700">
-                {resumo.cancelados}
-              </p>
-            </button>
-          </div>
-
-          <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-end md:justify-between">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <label className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                Status
-                <select
-                  value={statusFiltro}
-                  onChange={(event) =>
-                    setStatusFiltro(event.target.value as StatusFiltro)
-                  }
-                  className="mt-1 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-slate-700"
-                >
-                  <option value="todos">Todos</option>
-                  <option value="A">Abertos</option>
-                  <option value="B">Fechados</option>
-                  <option value="C">Cancelados</option>
-                </select>
-              </label>
-
-              <label className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                Ordenar por
-                <select
-                  value={colunaOrdenacao}
-                  onChange={(event) =>
-                    setColunaOrdenacao(event.target.value as ColunaOrdenacao)
-                  }
-                  className="mt-1 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-slate-700"
-                >
-                  <option value="numero_orcamento">Orçamento</option>
-                  <option value="data_emissao">Data de emissão</option>
-                  <option value="pedido_venda">Pedido de venda</option>
-                  <option value="data_fechamento">Data de fechamento</option>
-                </select>
-              </label>
-
-              <label className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                Direção
-                <select
-                  value={direcaoOrdenacao}
-                  onChange={(event) =>
-                    setDirecaoOrdenacao(event.target.value as DirecaoOrdenacao)
-                  }
-                  className="mt-1 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-slate-700"
-                >
-                  <option value="asc">Crescente</option>
-                  <option value="desc">Decrescente</option>
-                </select>
-              </label>
-            </div>
-
-            <p className="text-sm text-slate-500">
-              Exibindo{' '}
-              <strong className="text-slate-800">
-                {historicoFiltradoOrdenado.length}
-              </strong>{' '}
-              de{' '}
-              <strong className="text-slate-800">{historicoAgrupado.length}</strong>{' '}
-              orçamento(s).
-            </p>
-          </div>
+          <HistoricoFiltros
+            statusFiltro={statusFiltro}
+            colunaOrdenacao={colunaOrdenacao}
+            direcaoOrdenacao={direcaoOrdenacao}
+            totalExibidos={historicoFiltradoOrdenado.length}
+            total={historicoAgrupado.length}
+            onStatusFiltroChange={setStatusFiltro}
+            onColunaOrdenacaoChange={setColunaOrdenacao}
+            onDirecaoOrdenacaoChange={setDirecaoOrdenacao}
+          />
 
           {historicoFiltradoOrdenado.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
+            <div
+              role="status"
+              className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600"
+            >
               Nenhum orçamento encontrado com o filtro selecionado.
             </div>
           ) : null}
 
           {historicoFiltradoOrdenado.length > 0 ? (
-            <>
-              <div className="hidden overflow-hidden rounded-2xl border border-slate-200 md:block">
-                <table className="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3 text-left">
-                        <button
-                          type="button"
-                          onClick={() => alternarOrdenacao('numero_orcamento')}
-                          className="inline-flex items-center gap-1 font-bold"
-                        >
-                          Orçamento {iconeOrdenacao('numero_orcamento')}
-                        </button>
-                      </th>
-                      <th className="px-4 py-3 text-left">
-                        <button
-                          type="button"
-                          onClick={() => alternarOrdenacao('data_emissao')}
-                          className="inline-flex items-center gap-1 font-bold"
-                        >
-                          Data de emissão {iconeOrdenacao('data_emissao')}
-                        </button>
-                      </th>
-                      <th className="px-4 py-3 text-left">
-                        <button
-                          type="button"
-                          onClick={() => alternarOrdenacao('pedido_venda')}
-                          className="inline-flex items-center gap-1 font-bold"
-                        >
-                          Pedido de venda {iconeOrdenacao('pedido_venda')}
-                        </button>
-                      </th>
-                      <th className="px-4 py-3 text-left">
-                        <button
-                          type="button"
-                          onClick={() => alternarOrdenacao('data_fechamento')}
-                          className="inline-flex items-center gap-1 font-bold"
-                        >
-                          Data de fechamento {iconeOrdenacao('data_fechamento')}
-                        </button>
-                      </th>
-                      <th className="px-4 py-3 text-left">Status</th>
-                      <th className="px-4 py-3 text-right">Ações</th>
-                    </tr>
-                  </thead>
-
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {historicoFiltradoOrdenado.map((item) => {
-                      const destacado =
-                        orcamentoFocoInicial === item.numero_orcamento;
-
-                      return (
-                        <tr
-                          key={item.chave}
-                          className={destacado ? 'bg-blue-50' : 'hover:bg-slate-50'}
-                        >
-                          <td className="px-4 py-3">
-                            <button
-                              type="button"
-                              onClick={() => abrirDetalhes(item)}
-                              className="font-semibold text-blue-700 underline-offset-4 hover:underline"
-                            >
-                              {item.numero_orcamento}
-                            </button>
-                          </td>
-                          <td className="px-4 py-3 font-medium text-slate-700">
-                            {formatarData(item.data_emissao)}
-                          </td>
-                          <td className="px-4 py-3 text-slate-700">
-                            {item.pedido_venda || '-'}
-                          </td>
-                          <td className="px-4 py-3 text-slate-700">
-                            {formatarData(item.data_fechamento)}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span
-                              className={`rounded-full border px-2 py-1 text-xs font-bold ${obterClasseStatus(
-                                item.status
-                              )}`}
-                            >
-                              {item.status_descricao}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <Button
-                              type="button"
-                              onClick={() => abrirHistoricoManual(item)}
-                            >
-                              Histórico
-                            </Button>
-                          </td>
-
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="space-y-3 md:hidden">
-                {historicoFiltradoOrdenado.map((item) => {
-                  const destacado = orcamentoFocoInicial === item.numero_orcamento;
-
-                  return (
-                    <div
-                      key={item.chave}
-                      className={`block w-full rounded-2xl border p-4 text-left shadow-sm transition ${
-                        destacado
-                          ? 'border-blue-300 bg-blue-50'
-                          : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50'
-                      }`}
-                    >
-                      <div className="mb-3 flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-semibold uppercase text-slate-400">
-                            Orçamento
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => abrirDetalhes(item)}
-                            className="text-base font-bold text-blue-700 underline-offset-4 hover:underline"
-                          >
-                            {item.numero_orcamento}
-                          </button>
-                        </div>
-
-                        <span
-                          className={`rounded-full border px-2 py-1 text-xs font-bold ${obterClasseStatus(
-                            item.status
-                          )}`}
-                        >
-                          {item.status_descricao}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <p className="text-xs font-semibold uppercase text-slate-400">
-                            Emissão
-                          </p>
-                          <p className="font-medium text-slate-700">
-                            {formatarData(item.data_emissao)}
-                          </p>
-                        </div>
-
-                        <div>
-                          <p className="text-xs font-semibold uppercase text-slate-400">
-                            Pedido de venda
-                          </p>
-                          <p className="font-medium text-slate-700">
-                            {item.pedido_venda || '-'}
-                          </p>
-                        </div>
-
-                        <div className="col-span-2">
-                          <p className="text-xs font-semibold uppercase text-slate-400">
-                            Data de fechamento
-                          </p>
-                          <p className="font-medium text-slate-700">
-                            {formatarData(item.data_fechamento)}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="mt-3">
-                        <Button
-                          type="button"
-                          className="w-full"
-                          onClick={() => abrirHistoricoManual(item)}
-                        >
-                          Histórico
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
+            <TabelaHistoricoOrcamentos
+              historico={historicoFiltradoOrdenado}
+              colunaOrdenacao={colunaOrdenacao}
+              direcaoOrdenacao={direcaoOrdenacao}
+              orcamentoFocoInicial={orcamentoFocoInicial}
+              onOrdenar={alternarOrdenacao}
+              onAbrirDetalhes={abrirDetalhes}
+              onAbrirHistoricoManual={abrirHistoricoManual}
+            />
           ) : null}
         </div>
       ) : null}
@@ -1089,427 +409,45 @@ export default function HistoricoCliente({
       ) : null}
 
       {orcamentoDetalhado ? (
-        <Modal
-          title={`Orçamento ${orcamentoDetalhado.numero_orcamento}`}
-          subtitle="Itens, descrições e quantidades importados da planilha"
+        <ModalItensOrcamento
+          clienteId={clienteId}
+          orcamento={orcamentoDetalhado}
           onClose={fecharDetalhes}
-          scrollKey={`orcamento:${clienteId}:${orcamentoDetalhado.numero_orcamento}`}
-          footer={
-            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-              {orcamentoDetalhado.status === 'A' ? (
-                <Button
-                  type="button"
-                  variant="danger"
-                  onClick={() => {
-                    fecharDetalhes();
-                    abrirSolicitacaoCancelamento(orcamentoDetalhado);
-                  }}
-                >
-                  Solicitar cancelamento
-                </Button>
-              ) : null}
-
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={fecharDetalhes}
-              >
-                Fechar
-              </Button>
-            </div>
-          }
-        >
-          <div className="space-y-4">
-            <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm sm:grid-cols-4">
-              <div>
-                <p className="text-xs font-bold uppercase text-slate-400">
-                  Emissão
-                </p>
-                <p className="font-semibold text-slate-800">
-                  {formatarData(orcamentoDetalhado.data_emissao)}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs font-bold uppercase text-slate-400">
-                  Pedido venda
-                </p>
-                <p className="font-semibold text-slate-800">
-                  {orcamentoDetalhado.pedido_venda || '-'}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs font-bold uppercase text-slate-400">
-                  Fechamento
-                </p>
-                <p className="font-semibold text-slate-800">
-                  {formatarData(orcamentoDetalhado.data_fechamento)}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs font-bold uppercase text-slate-400">
-                  Status
-                </p>
-                <span
-                  className={`mt-1 inline-flex rounded-full border px-2 py-1 text-xs font-bold ${obterClasseStatus(
-                    orcamentoDetalhado.status
-                  )}`}
-                >
-                  {orcamentoDetalhado.status_descricao}
-                </span>
-              </div>
-            </div>
-
-            <div className="hidden overflow-hidden rounded-2xl border border-slate-200 md:block">
-              <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3 text-left">Número item</th>
-                    <th className="px-4 py-3 text-left">Descrição</th>
-                    <th className="px-4 py-3 text-left">Quantidade</th>
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {ordenarItensOrcamento(orcamentoDetalhado.itens).map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50">
-                      <td className="w-44 px-4 py-3 font-semibold text-slate-800">
-                        {item.numero_it_completo}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {item.descricao_item || '-'}
-                      </td>
-                      <td className="w-36 px-4 py-3 text-slate-700">
-                        {formatarQuantidade(item.quantidade_item)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="space-y-3 md:hidden">
-              {ordenarItensOrcamento(orcamentoDetalhado.itens).map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-2xl border border-slate-200 bg-white p-4"
-                >
-                  <p className="text-xs font-bold uppercase text-slate-400">
-                    Número item
-                  </p>
-                  <p className="font-semibold text-slate-900">
-                    {item.numero_it_completo}
-                  </p>
-
-                  <p className="mt-3 text-xs font-bold uppercase text-slate-400">
-                    Descrição
-                  </p>
-                  <p className="text-sm text-slate-700">
-                    {item.descricao_item || '-'}
-                  </p>
-
-                  <p className="mt-3 text-xs font-bold uppercase text-slate-400">
-                    Quantidade
-                  </p>
-                  <p className="text-sm font-semibold text-slate-700">
-                    {formatarQuantidade(item.quantidade_item)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Modal>
+          onSolicitarCancelamento={abrirSolicitacaoCancelamento}
+        />
       ) : null}
 
       {orcamentoHistoricoManual ? (
-        <Modal
-          title={`Histórico do orçamento ${orcamentoHistoricoManual.numero_orcamento}`}
-          subtitle="Registre contatos, observações, ações necessárias e lembretes específicos deste orçamento."
+        <ModalHistoricoOrcamento
+          clienteId={clienteId}
+          orcamento={orcamentoHistoricoManual}
+          interacoes={interacoesOrcamento}
+          formulario={formularioInteracao}
+          carregando={carregandoInteracoes}
+          salvando={salvandoInteracao}
+          erro={erroInteracao}
+          mensagem={mensagemInteracao}
+          onFormularioChange={setFormularioInteracao}
           onClose={fecharHistoricoManual}
-          scrollKey={`historico-manual:${clienteId}:${orcamentoHistoricoManual.numero_orcamento}`}
-          footer={
-            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={fecharHistoricoManual}
-                disabled={salvandoInteracao}
-              >
-                Fechar
-              </Button>
-
-              <Button
-                type="button"
-                onClick={salvarInteracaoOrcamento}
-                disabled={salvandoInteracao}
-              >
-                {salvandoInteracao ? 'Salvando...' : 'Salvar registro'}
-              </Button>
-            </div>
-          }
-        >
-          <div className="space-y-5">
-            <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm sm:grid-cols-3">
-              <div>
-                <p className="text-xs font-bold uppercase text-slate-400">
-                  Orçamento
-                </p>
-                <p className="font-semibold text-slate-900">
-                  {orcamentoHistoricoManual.numero_orcamento}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs font-bold uppercase text-slate-400">
-                  Emissão
-                </p>
-                <p className="font-semibold text-slate-900">
-                  {formatarData(orcamentoHistoricoManual.data_emissao)}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs font-bold uppercase text-slate-400">
-                  Status ERP
-                </p>
-                <span
-                  className={`mt-1 inline-flex rounded-full border px-2 py-1 text-xs font-bold ${obterClasseStatus(
-                    orcamentoHistoricoManual.status
-                  )}`}
-                >
-                  {orcamentoHistoricoManual.status_descricao}
-                </span>
-              </div>
-            </div>
-
-            {mensagemInteracao ? (
-              <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm font-medium text-blue-800">
-                {mensagemInteracao}
-              </div>
-            ) : null}
-
-            {erroInteracao ? (
-              <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
-                {erroInteracao}
-              </div>
-            ) : null}
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <h5 className="text-sm font-bold text-slate-900">
-                Novo registro
-              </h5>
-
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <label className="block text-sm font-semibold text-slate-700 sm:col-span-2">
-                  Observação do orçamento
-                  <textarea
-                    value={formularioInteracao.observacao}
-                    onChange={(event) =>
-                      setFormularioInteracao({
-                        ...formularioInteracao,
-                        observacao: event.target.value
-                      })
-                    }
-                    rows={4}
-                    className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-slate-500"
-                    placeholder="Digite o histórico, contato feito, pendência ou informação específica deste orçamento..."
-                  />
-                </label>
-
-                <label className="block text-sm font-semibold text-slate-700">
-                  Ação necessária
-                  <input
-                    type="text"
-                    value={formularioInteracao.proximo_passo}
-                    onChange={(event) =>
-                      setFormularioInteracao({
-                        ...formularioInteracao,
-                        proximo_passo: event.target.value
-                      })
-                    }
-                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-slate-500"
-                    placeholder="Ex.: Retornar para o cliente, enviar proposta revisada ou confirmar aprovação"
-                  />
-                </label>
-
-                <label className="block text-sm font-semibold text-slate-700">
-                  Lembrete
-                  <input
-                    type="date"
-                    value={formularioInteracao.data_retorno}
-                    onChange={(event) =>
-                      setFormularioInteracao({
-                        ...formularioInteracao,
-                        data_retorno: event.target.value
-                      })
-                    }
-                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-slate-500"
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <h5 className="text-sm font-bold text-slate-900">
-                Registros salvos
-              </h5>
-
-              {carregandoInteracoes ? (
-                <div className="mt-4 rounded-2xl bg-slate-50 p-4">
-                  <LoadingSpinner label="Carregando registros do orçamento..." />
-                </div>
-              ) : null}
-
-              {!carregandoInteracoes && interacoesOrcamento.length === 0 ? (
-                <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
-                  Ainda não há registros manuais para este orçamento.
-                </div>
-              ) : null}
-
-              {!carregandoInteracoes && interacoesOrcamento.length > 0 ? (
-                <div className="mt-4 space-y-3">
-                  {interacoesOrcamento.map((interacao) => (
-                    <article
-                      key={interacao.id}
-                      className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm"
-                    >
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <p className="font-bold text-slate-900">
-                            Registro do orçamento
-                          </p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {formatarDataHora(interacao.created_at)}
-                            {interacao.criado_por_email
-                              ? ` por ${interacao.criado_por_email}`
-                              : ''}
-                          </p>
-                        </div>
-
-                      </div>
-
-                      <p className="mt-3 whitespace-pre-wrap text-slate-700">
-                        {interacao.observacao}
-                      </p>
-
-                      {interacao.proximo_passo || interacao.data_retorno ? (
-                        <div className="mt-3 grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2">
-                          <div>
-                            <p className="text-xs font-bold uppercase text-slate-400">
-                              Ação necessária
-                            </p>
-                            <p className="font-medium text-slate-700">
-                              {interacao.proximo_passo || '-'}
-                            </p>
-                          </div>
-
-                          <div>
-                            <p className="text-xs font-bold uppercase text-slate-400">
-                              Lembrete
-                            </p>
-                            <p className="font-medium text-slate-700">
-                              {formatarData(interacao.data_retorno)}
-                            </p>
-                          </div>
-                        </div>
-                      ) : null}
-                    </article>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </Modal>
+          onSalvar={salvarHistoricoManual}
+        />
       ) : null}
 
       {orcamentoCancelamento ? (
-        <Modal
-          title={`Solicitar cancelamento do orçamento ${orcamentoCancelamento.numero_orcamento}`}
-          subtitle="O CRM abrirá um e-mail pronto para envio ao time de vendas."
+        <ModalCancelamentoOrcamento
+          clienteId={clienteId}
+          orcamento={orcamentoCancelamento}
+          emailCancelamento={emailCancelamento}
+          solicitante={usuarioEmail || 'Usuário não identificado'}
+          motivo={motivoCancelamento}
+          erro={erroCancelamento}
+          onMotivoChange={(valor) => {
+            setMotivoCancelamento(valor);
+            setErroCancelamento(null);
+          }}
           onClose={fecharSolicitacaoCancelamento}
-          scrollKey={`cancelamento:${clienteId}:${orcamentoCancelamento.numero_orcamento}`}
-          footer={
-            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={fecharSolicitacaoCancelamento}
-              >
-                Voltar
-              </Button>
-
-              <Button
-                type="button"
-                variant="danger"
-                onClick={confirmarSolicitacaoCancelamento}
-              >
-                Preparar e-mail
-              </Button>
-            </div>
-          }
-        >
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              <p className="font-semibold">
-                Esta ação não altera o status do orçamento no CRM nem no ERP.
-              </p>
-              <p className="mt-1">
-                Ela prepara um e-mail para solicitar o cancelamento ao endereço
-                {emailCancelamento}. O envio será confirmado no seu aplicativo
-                de e-mail.
-              </p>
-            </div>
-
-            <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm sm:grid-cols-3">
-              <div>
-                <p className="text-xs font-bold uppercase text-slate-400">
-                  Orçamento
-                </p>
-                <p className="font-semibold text-slate-900">
-                  {orcamentoCancelamento.numero_orcamento}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs font-bold uppercase text-slate-400">
-                  Solicitante
-                </p>
-                <p className="break-all font-semibold text-slate-900">
-                  {profile?.email || user?.email || 'Usuário não identificado'}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs font-bold uppercase text-slate-400">
-                  Status atual
-                </p>
-                <p className="font-semibold text-blue-700">Aberto</p>
-              </div>
-            </div>
-
-            <label className="block text-sm font-semibold text-slate-700">
-              Motivo do cancelamento
-              <textarea
-                value={motivoCancelamento}
-                onChange={(event) => {
-                  setMotivoCancelamento(event.target.value);
-                  setErroCancelamento(null);
-                }}
-                rows={5}
-                className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-slate-500"
-                placeholder="Descreva o motivo do cancelamento..."
-              />
-            </label>
-
-            {erroCancelamento ? (
-              <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
-                {erroCancelamento}
-              </div>
-            ) : null}
-          </div>
-        </Modal>
+          onConfirmar={confirmarSolicitacaoCancelamento}
+        />
       ) : null}
     </section>
   );
