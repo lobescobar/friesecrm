@@ -1,4 +1,6 @@
 const CACHE_PREFIXO = 'friese-crm:cache:';
+const PREFIXO_SCROLL_CRM = 'friese-crm:scroll:';
+const CHAVE_NAVEGACAO_CRM = 'friese-crm:navegacao-atual';
 const CACHE_TTL_PADRAO_MS = 10 * 60 * 1000;
 
 type CacheEnvelope<T> = {
@@ -68,6 +70,35 @@ export function removerCacheSessao(chave: string) {
   }
 
   window.sessionStorage.removeItem(montarChave(chave));
+}
+
+export function limparCachesCRM() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    const chavesParaRemover: string[] = [];
+
+    for (let indice = 0; indice < window.sessionStorage.length; indice += 1) {
+      const chave = window.sessionStorage.key(indice);
+
+      if (
+        chave &&
+        (chave.startsWith(CACHE_PREFIXO) ||
+          chave.startsWith(PREFIXO_SCROLL_CRM) ||
+          chave === CHAVE_NAVEGACAO_CRM)
+      ) {
+        chavesParaRemover.push(chave);
+      }
+    }
+
+    chavesParaRemover.forEach((chave) => {
+      window.sessionStorage.removeItem(chave);
+    });
+  } catch (erro) {
+    console.warn('Não foi possível limpar caches do CRM:', erro);
+  }
 }
 
 export const CACHE_TTL_CURTO_MS = 5 * 60 * 1000;

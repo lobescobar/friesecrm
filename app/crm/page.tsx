@@ -22,6 +22,7 @@ import AuditoriaAdmin from '../../components/crm/admin/AuditoriaAdmin';
 import AlertaOrcamentosAbertos from '../../components/crm/AlertaOrcamentosAbertos';
 import { OrcamentoAbertoResumo } from '../../hooks/useOrcamentosAbertos';
 import type { ClienteModalSecao } from '../../components/crm/cliente-modal/ClienteModalNav';
+import { limparCachesCRM } from '../../utils/sessionCache';
 
 const MapaClientes = dynamic(() => import('../../components/crm/MapaClientes'), {
   ssr: false,
@@ -563,6 +564,7 @@ function CRMContent() {
 
   const sair = async () => {
     limparNavegacaoSalva();
+    limparCachesCRM();
     await supabase.auth.signOut();
     router.push('/login');
   };

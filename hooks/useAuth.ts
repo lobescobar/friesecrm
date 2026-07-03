@@ -5,6 +5,7 @@ import { Profile } from '../types';
 import {
   CACHE_TTL_CURTO_MS,
   lerCacheSessao,
+  limparCachesCRM,
   removerCacheSessao,
   salvarCacheSessao
 } from '../utils/sessionCache';
@@ -87,6 +88,7 @@ export function useAuth() {
       if (!session) {
         setUser(null);
         setProfile(null);
+        limparCachesCRM();
         removerCacheSessao(CHAVE_CACHE_AUTH_PROFILE);
         setError(null);
         setLoading(false);
@@ -105,8 +107,8 @@ export function useAuth() {
 
       if (options?.mostrarLoading ?? true) {
         if (!profileRef.current) {
-        setLoading(true);
-      }
+          setLoading(true);
+        }
       }
 
       try {
@@ -162,6 +164,7 @@ export function useAuth() {
         if (ativo) {
           setUser(null);
           setProfile(null);
+          limparCachesCRM();
           removerCacheSessao(CHAVE_CACHE_AUTH_PROFILE);
           setError(mensagemErro(err));
           setLoading(false);
