@@ -352,7 +352,11 @@ export default function RegrasCancelamentoOrcamentos({
 
   if (loading) {
     return (
-      <section className="mt-4 rounded-2xl border bg-white p-4 text-sm text-slate-500">
+      <section
+        className="mt-4 rounded-2xl border bg-white p-4 text-sm text-slate-500"
+        role="status"
+        aria-live="polite"
+      >
         Carregando regras de cancelamento...
       </section>
     );
@@ -360,10 +364,13 @@ export default function RegrasCancelamentoOrcamentos({
 
   return (
     <>
-      <section className="mt-4 overflow-hidden rounded-2xl border bg-white shadow-sm">
+      <section
+        className="mt-4 overflow-hidden rounded-2xl border bg-white shadow-sm"
+        aria-labelledby="regras-cancelamento-titulo"
+      >
         <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-6 py-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-lg font-bold">
+            <h2 id="regras-cancelamento-titulo" className="text-lg font-bold">
               Regras de cancelamento de orçamentos
             </h2>
           </div>
@@ -373,6 +380,8 @@ export default function RegrasCancelamentoOrcamentos({
               type="button"
               onClick={() => setCriando((atual) => !atual)}
               disabled={salvando}
+              aria-expanded={criando}
+              aria-controls="formulario-cadastro-email-cancelamento"
             >
               {criando ? 'Cancelar cadastro' : 'Cadastrar e-mail'}
             </Button>
@@ -380,13 +389,20 @@ export default function RegrasCancelamentoOrcamentos({
         </div>
 
         {mensagem ? (
-          <div className="mx-6 mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <div
+            className="mx-6 mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600"
+            role={mensagem.toLowerCase().includes('erro') ? 'alert' : 'status'}
+            aria-live="polite"
+          >
             {mensagem}
           </div>
         ) : null}
 
         {criando ? (
-          <div className="grid gap-4 border-b border-slate-200 p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+          <div
+            id="formulario-cadastro-email-cancelamento"
+            className="grid gap-4 border-b border-slate-200 p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end"
+          >
             <label className="block">
               <span className="text-[10px] font-bold uppercase text-slate-400">
                 Nome do destino
@@ -394,6 +410,8 @@ export default function RegrasCancelamentoOrcamentos({
               <input
                 type="text"
                 value={novoEmail.nome}
+                autoComplete="organization"
+                aria-label="Nome do destino de cancelamento" 
                 onChange={(event) =>
                   setNovoEmail({ ...novoEmail, nome: event.target.value })
                 }
@@ -409,6 +427,8 @@ export default function RegrasCancelamentoOrcamentos({
               <input
                 type="email"
                 value={novoEmail.email}
+                autoComplete="email"
+                aria-label="E-mail do destino de cancelamento" 
                 onChange={(event) =>
                   setNovoEmail({ ...novoEmail, email: event.target.value })
                 }
@@ -417,14 +437,23 @@ export default function RegrasCancelamentoOrcamentos({
               />
             </label>
 
-            <Button type="button" onClick={cadastrarEmail} disabled={salvando}>
+            <Button
+              type="button"
+              onClick={cadastrarEmail}
+              disabled={salvando}
+              loading={salvando}
+              loadingText="Salvando..."
+            >
               Salvar e-mail
             </Button>
           </div>
         ) : null}
 
         {emails.length === 0 ? (
-          <div className="m-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
+          <div
+            className="m-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600"
+            role="status"
+          >
             Nenhum e-mail cadastrado.
           </div>
         ) : null}
@@ -432,14 +461,17 @@ export default function RegrasCancelamentoOrcamentos({
         {emails.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
+              <caption className="sr-only">
+                Destinos de e-mail para solicitação de cancelamento de orçamentos e seus segmentos.
+              </caption>
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
-                  <th className="px-6 py-3 text-left font-semibold">E-mail</th>
-                  <th className="px-6 py-3 text-left font-semibold">Destino</th>
-                  <th className="px-6 py-3 text-left font-semibold">
+                  <th scope="col" className="px-6 py-3 text-left font-semibold">E-mail</th>
+                  <th scope="col" className="px-6 py-3 text-left font-semibold">Destino</th>
+                  <th scope="col" className="px-6 py-3 text-left font-semibold">
                     Segmentos
                   </th>
-                  <th className="px-6 py-3 text-right font-semibold">Ações</th>
+                  <th scope="col" className="px-6 py-3 text-right font-semibold">Ações</th>
                 </tr>
               </thead>
 
@@ -463,6 +495,7 @@ export default function RegrasCancelamentoOrcamentos({
                         <Button
                           type="button"
                           variant="secondary"
+                          aria-label={`Editar regras do e-mail ${email.email}`}
                           onClick={() => {
                             setEditando(email);
                             setMensagem(null);
@@ -493,6 +526,8 @@ export default function RegrasCancelamentoOrcamentos({
                 variant="danger"
                 onClick={() => excluirEmail(editando)}
                 disabled={salvando}
+                loading={salvando}
+                loadingText="Excluindo..."
               >
                 Excluir cadastro
               </Button>
@@ -510,6 +545,8 @@ export default function RegrasCancelamentoOrcamentos({
                 type="button"
                 onClick={salvarEdicao}
                 disabled={salvando}
+                loading={salvando}
+                loadingText="Salvando..."
               >
                 Salvar alterações
               </Button>
@@ -525,6 +562,8 @@ export default function RegrasCancelamentoOrcamentos({
                 <input
                   type="text"
                   value={editando.nome}
+                  autoComplete="organization"
+                  aria-label={`Nome do destino ${editando.email}`} 
                   onChange={(event) =>
                     setEditando({ ...editando, nome: event.target.value })
                   }
@@ -539,6 +578,8 @@ export default function RegrasCancelamentoOrcamentos({
                 <input
                   type="email"
                   value={editando.email}
+                  autoComplete="email"
+                  aria-label="E-mail do destino de cancelamento em edição" 
                   onChange={(event) =>
                     setEditando({ ...editando, email: event.target.value })
                   }
@@ -552,7 +593,10 @@ export default function RegrasCancelamentoOrcamentos({
                 Segmentos permitidos
               </legend>
 
-              <div className="mt-2 max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white p-3">
+              <div
+                className="mt-2 max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white p-3"
+                aria-label="Lista de segmentos permitidos para este e-mail"
+              >
                 {segmentos.map((segmento) => {
                   const marcado = segmentoEstaNoEmail(editando.id, segmento);
 
@@ -565,6 +609,7 @@ export default function RegrasCancelamentoOrcamentos({
                         type="checkbox"
                         checked={marcado}
                         disabled={salvando}
+                        aria-label={`${marcado ? 'Remover' : 'Vincular'} segmento ${segmento} ao e-mail ${editando.email}`}
                         onChange={() => alternarSegmento(editando, segmento)}
                       />
                       <span>{segmento}</span>

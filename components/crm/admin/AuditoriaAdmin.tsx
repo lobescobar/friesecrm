@@ -48,7 +48,14 @@ export default function AuditoriaAdmin() {
   }
 
   return (
-    <section className="mt-4 space-y-4">
+    <section
+      className="mt-4 space-y-4"
+      aria-labelledby="auditoria-admin-titulo"
+    >
+      <div className="sr-only">
+        <h2 id="auditoria-admin-titulo">Auditoria administrativa</h2>
+      </div>
+
       <AuditoriaFiltros
         filtros={filtros}
         tabelas={tabelas}
@@ -60,7 +67,10 @@ export default function AuditoriaAdmin() {
       />
 
       {error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div
+          className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          role="alert"
+        >
           Não foi possível carregar auditoria: {error}
         </div>
       ) : null}
@@ -78,7 +88,11 @@ export default function AuditoriaAdmin() {
       </div>
 
       {loading ? (
-        <p className="rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm font-medium text-blue-700">
+        <p
+          className="rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm font-medium text-blue-700"
+          role="status"
+          aria-live="polite"
+        >
           Carregando eventos de auditoria...
         </p>
       ) : null}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Contato } from '../../types';
 import { emailValido, telefoneValido } from '../../utils/validators';
 import { formatarTelefone, montarLinkWhatsapp } from '../../utils/formatters';
@@ -39,6 +39,17 @@ const formularioInicial: FormContato = {
   endereco_visita: ''
 };
 
+function mensagemEhErro(mensagem?: string | null, erro?: string | null) {
+  const texto = erro || mensagem || '';
+
+  return (
+    Boolean(erro) ||
+    texto.startsWith('Informe') ||
+    texto.startsWith('Limite') ||
+    texto.startsWith('Não foi possível')
+  );
+}
+
 export default function ContatosCliente({
   clienteId,
   contatos,
@@ -53,6 +64,7 @@ export default function ContatosCliente({
   const [edicao, setEdicao] = useState<FormContato>(formularioInicial);
   const [mensagem, setMensagem] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const tituloId = useId();
 
   const validar = (contato: FormContato) => {
     if (!contato.nome.trim()) return 'Informe o nome do contato.';
@@ -147,59 +159,88 @@ export default function ContatosCliente({
     );
   };
 
+  const textoMensagem = mensagem || erro;
+  const mensagemErro = mensagemEhErro(mensagem, erro);
+
   return (
-    <section className="space-y-4">
+    <section aria-labelledby={tituloId} className="space-y-4">
       <div className="flex items-center justify-between border-b pb-2">
-        <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400">
+        <h4
+          id={tituloId}
+          className="text-xs font-bold uppercase tracking-widest text-slate-400"
+        >
           Contatos da Empresa
         </h4>
 
-        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold">
+        <span
+          className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold"
+          aria-label={`${contatos.length} de 3 contatos cadastrados`}
+        >
           {contatos.length}/3 cadastrados
         </span>
       </div>
 
       <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <input
-            type="text"
-            placeholder="Nome"
-            value={novoContato.nome}
-            onChange={(event) =>
-              setNovoContato({ ...novoContato, nome: event.target.value })
-            }
-            className="rounded-xl border px-3 py-2 text-sm"
-          />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              Nome
+            </span>
+            <input
+              type="text"
+              value={novoContato.nome}
+              onChange={(event) =>
+                setNovoContato({ ...novoContato, nome: event.target.value })
+              }
+              className="w-full rounded-xl border px-3 py-2 text-sm"
+              autoComplete="name"
+            />
+          </label>
 
-          <input
-            type="text"
-            placeholder="Cargo"
-            value={novoContato.cargo}
-            onChange={(event) =>
-              setNovoContato({ ...novoContato, cargo: event.target.value })
-            }
-            className="rounded-xl border px-3 py-2 text-sm"
-          />
+          <label className="block">
+            <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              Cargo
+            </span>
+            <input
+              type="text"
+              value={novoContato.cargo}
+              onChange={(event) =>
+                setNovoContato({ ...novoContato, cargo: event.target.value })
+              }
+              className="w-full rounded-xl border px-3 py-2 text-sm"
+              autoComplete="organization-title"
+            />
+          </label>
 
-          <input
-            type="text"
-            placeholder="Telefone"
-            value={novoContato.telefone}
-            onChange={(event) =>
-              setNovoContato({ ...novoContato, telefone: event.target.value })
-            }
-            className="rounded-xl border px-3 py-2 text-sm"
-          />
+          <label className="block">
+            <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              Telefone
+            </span>
+            <input
+              type="tel"
+              value={novoContato.telefone}
+              onChange={(event) =>
+                setNovoContato({ ...novoContato, telefone: event.target.value })
+              }
+              className="w-full rounded-xl border px-3 py-2 text-sm"
+              autoComplete="tel"
+            />
+          </label>
 
-          <input
-            type="email"
-            placeholder="E-mail"
-            value={novoContato.email}
-            onChange={(event) =>
-              setNovoContato({ ...novoContato, email: event.target.value })
-            }
-            className="rounded-xl border px-3 py-2 text-sm"
-          />
+          <label className="block">
+            <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              E-mail
+            </span>
+            <input
+              type="email"
+              value={novoContato.email}
+              onChange={(event) =>
+                setNovoContato({ ...novoContato, email: event.target.value })
+              }
+              className="w-full rounded-xl border px-3 py-2 text-sm"
+              autoComplete="email"
+            />
+          </label>
         </div>
 
         <label className="mt-3 block">
@@ -217,6 +258,7 @@ export default function ContatosCliente({
             rows={2}
             className="w-full rounded-xl border px-3 py-2 text-sm"
             placeholder="Informe o endereço específico para visitar este contato"
+            autoComplete="street-address"
           />
         </label>
 
@@ -224,27 +266,37 @@ export default function ContatosCliente({
           type="button"
           onClick={adicionar}
           disabled={salvando || contatos.length >= 3}
+          loading={salvando}
+          loadingText="Adicionando contato..."
           className="mt-3 w-full"
         >
           Adicionar Contato
         </Button>
 
         {contatos.length >= 3 ? (
-          <p className="mt-2 text-xs text-amber-700">
+          <p className="mt-2 text-xs text-amber-700" role="status">
             Limite de 3 contatos por cliente atingido.
           </p>
         ) : null}
       </div>
 
-      {mensagem || erro ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-          {mensagem || erro}
+      {textoMensagem ? (
+        <div
+          className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600"
+          role={mensagemErro ? 'alert' : 'status'}
+          aria-live={mensagemErro ? 'assertive' : 'polite'}
+        >
+          {textoMensagem}
         </div>
       ) : null}
 
       <div className="space-y-3">
         {carregando ? (
-          <div className="py-4 text-center text-sm text-slate-400">
+          <div
+            className="py-4 text-center text-sm text-slate-400"
+            role="status"
+            aria-live="polite"
+          >
             Carregando contatos...
           </div>
         ) : contatos.length === 0 ? (
@@ -260,45 +312,70 @@ export default function ContatosCliente({
               <article
                 key={contato.id}
                 className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition hover:border-slate-200"
+                aria-label={`Contato ${contato.nome}`}
               >
                 {editando ? (
                   <div className="space-y-3">
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      <input
-                        type="text"
-                        value={edicao.nome}
-                        onChange={(event) =>
-                          setEdicao({ ...edicao, nome: event.target.value })
-                        }
-                        className="rounded-xl border px-3 py-2 text-sm"
-                      />
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                          Nome
+                        </span>
+                        <input
+                          type="text"
+                          value={edicao.nome}
+                          onChange={(event) =>
+                            setEdicao({ ...edicao, nome: event.target.value })
+                          }
+                          className="w-full rounded-xl border px-3 py-2 text-sm"
+                          autoComplete="name"
+                        />
+                      </label>
 
-                      <input
-                        type="text"
-                        value={edicao.cargo}
-                        onChange={(event) =>
-                          setEdicao({ ...edicao, cargo: event.target.value })
-                        }
-                        className="rounded-xl border px-3 py-2 text-sm"
-                      />
+                      <label className="block">
+                        <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                          Cargo
+                        </span>
+                        <input
+                          type="text"
+                          value={edicao.cargo}
+                          onChange={(event) =>
+                            setEdicao({ ...edicao, cargo: event.target.value })
+                          }
+                          className="w-full rounded-xl border px-3 py-2 text-sm"
+                          autoComplete="organization-title"
+                        />
+                      </label>
 
-                      <input
-                        type="text"
-                        value={edicao.telefone}
-                        onChange={(event) =>
-                          setEdicao({ ...edicao, telefone: event.target.value })
-                        }
-                        className="rounded-xl border px-3 py-2 text-sm"
-                      />
+                      <label className="block">
+                        <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                          Telefone
+                        </span>
+                        <input
+                          type="tel"
+                          value={edicao.telefone}
+                          onChange={(event) =>
+                            setEdicao({ ...edicao, telefone: event.target.value })
+                          }
+                          className="w-full rounded-xl border px-3 py-2 text-sm"
+                          autoComplete="tel"
+                        />
+                      </label>
 
-                      <input
-                        type="email"
-                        value={edicao.email}
-                        onChange={(event) =>
-                          setEdicao({ ...edicao, email: event.target.value })
-                        }
-                        className="rounded-xl border px-3 py-2 text-sm"
-                      />
+                      <label className="block">
+                        <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                          E-mail
+                        </span>
+                        <input
+                          type="email"
+                          value={edicao.email}
+                          onChange={(event) =>
+                            setEdicao({ ...edicao, email: event.target.value })
+                          }
+                          className="w-full rounded-xl border px-3 py-2 text-sm"
+                          autoComplete="email"
+                        />
+                      </label>
                     </div>
 
                     <label className="block">
@@ -316,6 +393,7 @@ export default function ContatosCliente({
                         rows={2}
                         className="w-full rounded-xl border px-3 py-2 text-sm"
                         placeholder="Informe o endereço específico para visitar este contato"
+                        autoComplete="street-address"
                       />
                     </label>
 
@@ -324,6 +402,8 @@ export default function ContatosCliente({
                         type="button"
                         onClick={() => salvarEdicao(contato.id)}
                         disabled={salvando}
+                        loading={salvando}
+                        loadingText="Salvando contato..."
                       >
                         Salvar
                       </Button>
@@ -373,8 +453,8 @@ export default function ContatosCliente({
                           href={whatsapp}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="rounded-full bg-green-50 p-2 text-green-600 transition hover:bg-green-100"
-                          aria-label="Abrir WhatsApp"
+                          className="rounded-full bg-green-50 p-2 text-green-600 transition hover:bg-green-100 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
+                          aria-label={`Abrir WhatsApp de ${contato.nome}`}
                         >
                           📱
                         </a>
@@ -383,8 +463,8 @@ export default function ContatosCliente({
                       {contato.email ? (
                         <a
                           href={`mailto:${contato.email}`}
-                          className="rounded-full bg-blue-50 p-2 text-blue-600 transition hover:bg-blue-100"
-                          aria-label="Enviar e-mail"
+                          className="rounded-full bg-blue-50 p-2 text-blue-600 transition hover:bg-blue-100 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
+                          aria-label={`Enviar e-mail para ${contato.nome}`}
                         >
                           ✉️
                         </a>
@@ -393,8 +473,8 @@ export default function ContatosCliente({
                       <button
                         type="button"
                         onClick={() => iniciarEdicao(contato)}
-                        className="rounded-full bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200"
-                        aria-label="Editar contato"
+                        className="rounded-full bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
+                        aria-label={`Editar contato ${contato.nome}`}
                       >
                         ✏️
                       </button>
@@ -402,8 +482,8 @@ export default function ContatosCliente({
                       <button
                         type="button"
                         onClick={() => excluir(contato.id)}
-                        className="rounded-full bg-red-50 p-2 text-red-600 transition hover:bg-red-100"
-                        aria-label="Excluir contato"
+                        className="rounded-full bg-red-50 p-2 text-red-600 transition hover:bg-red-100 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
+                        aria-label={`Excluir contato ${contato.nome}`}
                       >
                         🗑️
                       </button>

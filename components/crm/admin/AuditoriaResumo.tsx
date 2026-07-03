@@ -54,21 +54,26 @@ export default function AuditoriaResumo({ logs }: AuditoriaResumoProps) {
   ];
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-      {cards.map((card) => (
-        <div
-          key={card.titulo}
-          className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-        >
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-            {card.titulo}
-          </p>
-          <p className="mt-2 text-2xl font-bold text-slate-900">
-            {card.valor.toLocaleString('pt-BR')}
-          </p>
-          <p className="mt-1 text-xs text-slate-500">{card.descricao}</p>
-        </div>
-      ))}
-    </div>
+    <section aria-label="Resumo dos eventos de auditoria">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {cards.map((card) => (
+          <article
+            key={card.titulo}
+            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+            aria-label={`${card.titulo}: ${card.valor.toLocaleString(
+              'pt-BR'
+            )}. ${card.descricao}`}
+          >
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+              {card.titulo}
+            </p>
+            <p className="mt-2 text-2xl font-bold text-slate-900">
+              {card.valor.toLocaleString('pt-BR')}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">{card.descricao}</p>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }

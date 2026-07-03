@@ -44,18 +44,23 @@ function ListaCheckbox({
   titulo,
   opcoes,
   selecionados,
-  onChange
+  onChange,
+  disabled = false
 }: {
   titulo: string;
   opcoes: string[];
   selecionados: string[];
   onChange: (valores: string[]) => void;
+  disabled?: boolean;
 }) {
   if (!opcoes.length) {
     return (
       <div>
         <p className="text-[10px] font-bold uppercase text-slate-400">{titulo}</p>
-        <p className="mt-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-500">
+        <p
+          className="mt-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-500"
+          role="status"
+        >
           Nenhuma opção disponível no banco.
         </p>
       </div>
@@ -68,7 +73,10 @@ function ListaCheckbox({
         {titulo}
       </legend>
 
-      <div className="mt-2 max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white p-2">
+      <div
+        className="mt-2 max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white p-2"
+        aria-label={`Lista de ${titulo.toLowerCase()}`}
+      >
         {opcoes.map((opcao) => (
           <label
             key={opcao}
@@ -77,6 +85,8 @@ function ListaCheckbox({
             <input
               type="checkbox"
               checked={selecionados.includes(opcao)}
+              disabled={disabled}
+              aria-label={`${selecionados.includes(opcao) ? 'Remover' : 'Adicionar'} ${opcao} em ${titulo}`}
               onChange={() => onChange(alternarItem(selecionados, opcao))}
             />
             <span>{opcao}</span>
@@ -294,7 +304,11 @@ export default function GestaoUsuarios({
 
   if (loading) {
     return (
-      <div className="mt-4 rounded-2xl border bg-white p-4 text-sm text-slate-500">
+      <div
+        className="mt-4 rounded-2xl border bg-white p-4 text-sm text-slate-500"
+        role="status"
+        aria-live="polite"
+      >
         Carregando usuários...
       </div>
     );
@@ -304,10 +318,15 @@ export default function GestaoUsuarios({
     <>
       <RegrasCancelamentoOrcamentos segmentosDisponiveis={segmentos} />
 
-      <section className="mt-4 overflow-hidden rounded-2xl border bg-white shadow-sm">
+      <section
+        className="mt-4 overflow-hidden rounded-2xl border bg-white shadow-sm"
+        aria-labelledby="gestao-usuarios-titulo"
+      >
         <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-6 py-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-lg font-bold">Gestão de Usuários e Alçadas</h2>
+            <h2 id="gestao-usuarios-titulo" className="text-lg font-bold">
+              Gestão de Usuários e Alçadas
+            </h2>
             <p className="text-sm text-slate-500">
               Controle quem acessa segmentos e estados do CRM.
             </p>
@@ -317,19 +336,28 @@ export default function GestaoUsuarios({
             type="button"
             onClick={() => setCriando((atual) => !atual)}
             disabled={salvando}
+            aria-expanded={criando}
+            aria-controls="formulario-criacao-usuario"
           >
             {criando ? 'Cancelar criação' : 'Criar usuário'}
           </Button>
         </div>
 
         {mensagem ? (
-          <div className="mx-6 mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <div
+            className="mx-6 mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600"
+            role={mensagem.toLowerCase().includes('erro') || mensagem.toLowerCase().includes('não foi possível') ? 'alert' : 'status'}
+            aria-live="polite"
+          >
             {mensagem}
           </div>
         ) : null}
 
         {criando ? (
-          <div className="grid gap-4 border-b border-slate-200 p-6 lg:grid-cols-2">
+          <div
+            id="formulario-criacao-usuario"
+            className="grid gap-4 border-b border-slate-200 p-6 lg:grid-cols-2"
+          >
             <div className="space-y-3">
               <label className="block">
                 <span className="text-[10px] font-bold uppercase text-slate-400">
@@ -338,6 +366,8 @@ export default function GestaoUsuarios({
                 <input
                   type="email"
                   value={novoUsuario.email}
+                  autoComplete="email"
+                  aria-label="E-mail do novo usuário" 
                   onChange={(event) =>
                     setNovoUsuario({ ...novoUsuario, email: event.target.value })
                   }
@@ -352,6 +382,8 @@ export default function GestaoUsuarios({
                 <input
                   type="password"
                   value={novoUsuario.password}
+                  autoComplete="new-password"
+                  aria-label="Senha provisória do novo usuário" 
                   onChange={(event) =>
                     setNovoUsuario({ ...novoUsuario, password: event.target.value })
                   }
@@ -365,6 +397,7 @@ export default function GestaoUsuarios({
                 </span>
                 <select
                   value={novoUsuario.role}
+                  aria-label="Perfil do novo usuário"
                   onChange={(event) =>
                     setNovoUsuario({
                       ...novoUsuario,
@@ -378,7 +411,13 @@ export default function GestaoUsuarios({
                 </select>
               </label>
 
-              <Button type="button" onClick={criarUsuario} disabled={salvando}>
+              <Button
+                type="button"
+                onClick={criarUsuario}
+                disabled={salvando}
+                loading={salvando}
+                loadingText="Criando usuário..."
+              >
                 Criar usuário
               </Button>
             </div>
@@ -389,6 +428,7 @@ export default function GestaoUsuarios({
                   titulo="Segmentos permitidos"
                   opcoes={segmentos}
                   selecionados={novoUsuario.segmentos_permitidos}
+                  disabled={salvando}
                   onChange={(valores) =>
                     setNovoUsuario({
                       ...novoUsuario,
@@ -401,6 +441,7 @@ export default function GestaoUsuarios({
                   titulo="Estados permitidos"
                   opcoes={estados}
                   selecionados={novoUsuario.estados_permitidos}
+                  disabled={salvando}
                   onChange={(valores) =>
                     setNovoUsuario({
                       ...novoUsuario,
@@ -410,7 +451,10 @@ export default function GestaoUsuarios({
                 />
               </div>
             ) : (
-              <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4 text-sm text-purple-700">
+              <div
+                className="rounded-2xl border border-purple-200 bg-purple-50 p-4 text-sm text-purple-700"
+                role="status"
+              >
                 Administradores têm acesso total a todos os clientes e alçadas.
               </div>
             )}
@@ -419,12 +463,15 @@ export default function GestaoUsuarios({
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
+            <caption className="sr-only">
+              Usuários cadastrados no CRM, perfil de acesso, alçadas e ações de edição.
+            </caption>
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
-                <th className="px-6 py-3 text-left font-semibold">E-mail</th>
-                <th className="px-6 py-3 text-left font-semibold">Cargo</th>
-                <th className="px-6 py-3 text-left font-semibold">Alçadas</th>
-                <th className="px-6 py-3 text-right font-semibold">Ações</th>
+                <th scope="col" className="px-6 py-3 text-left font-semibold">E-mail</th>
+                <th scope="col" className="px-6 py-3 text-left font-semibold">Cargo</th>
+                <th scope="col" className="px-6 py-3 text-left font-semibold">Alçadas</th>
+                <th scope="col" className="px-6 py-3 text-right font-semibold">Ações</th>
               </tr>
             </thead>
 
@@ -466,6 +513,7 @@ export default function GestaoUsuarios({
                     <Button
                       type="button"
                       variant="secondary"
+                      aria-label={`Editar usuário ${usuario.email}`}
                       onClick={() => {
                         setEditando(usuario);
                         setMensagem(null);
@@ -494,6 +542,8 @@ export default function GestaoUsuarios({
                 variant="danger"
                 onClick={() => excluirUsuario(editando)}
                 disabled={salvando}
+                loading={salvando}
+                loadingText="Excluindo..."
               >
                 Excluir usuário
               </Button>
@@ -511,6 +561,8 @@ export default function GestaoUsuarios({
                 type="button"
                 onClick={salvarAlteracoes}
                 disabled={salvando}
+                loading={salvando}
+                loadingText="Salvando..."
               >
                 Salvar alterações
               </Button>
@@ -524,6 +576,7 @@ export default function GestaoUsuarios({
               </span>
               <select
                 value={editando.role}
+                aria-label={`Perfil de acesso de ${editando.email}`}
                 onChange={(event) =>
                   setEditando({
                     ...editando,
@@ -543,6 +596,7 @@ export default function GestaoUsuarios({
                   titulo="Segmentos permitidos"
                   opcoes={segmentos}
                   selecionados={editando.segmentos_permitidos || []}
+                  disabled={salvando}
                   onChange={(valores) =>
                     setEditando({
                       ...editando,
@@ -555,6 +609,7 @@ export default function GestaoUsuarios({
                   titulo="Estados permitidos"
                   opcoes={estados}
                   selecionados={editando.estados_permitidos || []}
+                  disabled={salvando}
                   onChange={(valores) =>
                     setEditando({
                       ...editando,
@@ -564,7 +619,10 @@ export default function GestaoUsuarios({
                 />
               </div>
             ) : (
-              <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4 text-sm text-purple-700">
+              <div
+                className="rounded-2xl border border-purple-200 bg-purple-50 p-4 text-sm text-purple-700"
+                role="status"
+              >
                 Administradores têm acesso total.
               </div>
             )}
