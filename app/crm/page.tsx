@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { supabase } from '../../lib/supabase';
@@ -8,7 +8,10 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import { useAuth } from '../../hooks/useAuth';
 import { useClientes, useFiltragemClientes } from '../../hooks/useClientes';
 import { useContatos } from '../../hooks/useContatos';
+import { useClienteMontado } from '../../hooks/useClienteMontado';
+import { useNavegacaoCRM } from '../../hooks/useNavegacaoCRM';
 import { Cliente } from '../../types';
+import type { AreaCRM } from '../../types/crmNavegacao';
 import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
@@ -20,6 +23,7 @@ import ClienteModal from '../../components/crm/ClienteModal';
 import GestaoUsuarios from '../../components/crm/GestaoUsuarios';
 import AuditoriaAdmin from '../../components/crm/admin/AuditoriaAdmin';
 import AlertaOrcamentosAbertos from '../../components/crm/AlertaOrcamentosAbertos';
+import NavegacaoAreasCRM from '../../components/crm/pagina/NavegacaoAreasCRM';
 import { OrcamentoAbertoResumo } from '../../hooks/useOrcamentosAbertos';
 import type { ClienteModalSecao } from '../../components/crm/cliente-modal/ClienteModalNav';
 import { limparCachesCRM } from '../../utils/sessionCache';
@@ -33,322 +37,18 @@ const MapaClientes = dynamic(() => import('../../components/crm/MapaClientes'), 
   )
 });
 
-const secoesCliente: ClienteModalSecao[] = [
-  'dados',
-  'contatos',
-  'historico',
-  'mapa',
-  'observacoes'
-];
-
-const CHAVE_NAVEGACAO_CRM = 'friese-crm:navegacao-atual';
-
-function assinarMontagemCliente(onStoreChange: () => void) {
-  const timeoutId = window.setTimeout(onStoreChange, 0);
-  return () => window.clearTimeout(timeoutId);
-}
-
-function lerSnapshotClienteMontado() {
-  return true;
-}
-
-function lerSnapshotServidorMontado() {
-  return false;
-}
-
-type EstadoNavegacaoCRM = {
-  cliente: string | null;
-  aba: ClienteModalSecao;
-  orcamento: string | null;
-};
-
-type AtualizacaoParametros = {
-  cliente?: string | null;
-  aba?: ClienteModalSecao | null;
-  orcamento?: string | null;
-};
-
-const navegacaoInicialPadrao: EstadoNavegacaoCRM = {
-  cliente: null,
-  aba: 'dados',
-  orcamento: null
-};
-
-function normalizarSecaoCliente(valor: string | null): ClienteModalSecao {
-  if (secoesCliente.includes(valor as ClienteModalSecao)) {
-    return valor as ClienteModalSecao;
-  }
-
-  return 'dados';
-}
-
-function normalizarNavegacao(
-  navegacao: Partial<EstadoNavegacaoCRM> | null | undefined
-): EstadoNavegacaoCRM {
-  return {
-    cliente: navegacao?.cliente || null,
-    aba: normalizarSecaoCliente(navegacao?.aba || null),
-    orcamento: navegacao?.orcamento || null
-  };
-}
-
-function lerNavegacaoDaUrl(): EstadoNavegacaoCRM {
-  if (typeof window === 'undefined') {
-    return navegacaoInicialPadrao;
-  }
-
-  const parametros = new URLSearchParams(window.location.search);
-
-  return normalizarNavegacao({
-    cliente: parametros.get('cliente'),
-    aba: normalizarSecaoCliente(parametros.get('aba')),
-    orcamento: parametros.get('orcamento')
-  });
-}
-
-function lerNavegacaoSalva(): EstadoNavegacaoCRM {
-  if (typeof window === 'undefined') {
-    return navegacaoInicialPadrao;
-  }
-
-  try {
-    const valorSalvo = window.sessionStorage.getItem(CHAVE_NAVEGACAO_CRM);
-
-    if (!valorSalvo) {
-      return navegacaoInicialPadrao;
-    }
-
-    const dados = JSON.parse(valorSalvo) as Partial<EstadoNavegacaoCRM>;
-    return normalizarNavegacao(dados);
-  } catch (erro) {
-    console.warn('Não foi possível ler navegação salva do CRM:', erro);
-    return navegacaoInicialPadrao;
-  }
-}
-
-function salvarNavegacao(navegacao: EstadoNavegacaoCRM) {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  if (!navegacao.cliente) {
-    window.sessionStorage.removeItem(CHAVE_NAVEGACAO_CRM);
-    return;
-  }
-
-  window.sessionStorage.setItem(CHAVE_NAVEGACAO_CRM, JSON.stringify(navegacao));
-}
-
-function limparNavegacaoSalva() {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.sessionStorage.removeItem(CHAVE_NAVEGACAO_CRM);
-}
-
-function temParametrosDeNavegacaoNaUrl() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-
-  const parametros = new URLSearchParams(window.location.search);
-
-  return (
-    parametros.has('cliente') ||
-    parametros.has('aba') ||
-    parametros.has('orcamento')
-  );
-}
-
-function lerNavegacaoInicial(): EstadoNavegacaoCRM {
-  if (typeof window === 'undefined') {
-    return navegacaoInicialPadrao;
-  }
-
-  const navegacaoUrl = lerNavegacaoDaUrl();
-
-  if (navegacaoUrl.cliente || temParametrosDeNavegacaoNaUrl()) {
-    return navegacaoUrl;
-  }
-
-  const navegacaoSalva = lerNavegacaoSalva();
-
-  if (navegacaoSalva.cliente) {
-    return navegacaoSalva;
-  }
-
-  return navegacaoInicialPadrao;
-}
-
-function escreverNavegacaoNaUrl(navegacao: EstadoNavegacaoCRM) {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  const parametrosAtuais = new URLSearchParams(window.location.search);
-
-  if (navegacao.cliente) {
-    parametrosAtuais.set('cliente', navegacao.cliente);
-    parametrosAtuais.set('aba', navegacao.aba);
-
-    if (navegacao.orcamento) {
-      parametrosAtuais.set('orcamento', navegacao.orcamento);
-    } else {
-      parametrosAtuais.delete('orcamento');
-    }
-  } else {
-    parametrosAtuais.delete('cliente');
-    parametrosAtuais.delete('aba');
-    parametrosAtuais.delete('orcamento');
-  }
-
-  const query = parametrosAtuais.toString();
-  const destino = query
-    ? `${window.location.pathname}?${query}`
-    : window.location.pathname;
-  const atual = `${window.location.pathname}${window.location.search}`;
-
-  if (destino !== atual) {
-    window.history.replaceState(null, '', destino);
-  }
-}
-
-function navegacoesIguais(
-  atual: EstadoNavegacaoCRM,
-  proxima: EstadoNavegacaoCRM
-) {
-  return (
-    atual.cliente === proxima.cliente &&
-    atual.aba === proxima.aba &&
-    atual.orcamento === proxima.orcamento
-  );
-}
-
-type AreaCRM =
-  | 'orcamentos'
-  | 'clientes'
-  | 'mapa'
-  | 'administracao'
-  | 'auditoria';
-
-type AreaNavegacaoCRM = {
-  id: AreaCRM;
-  titulo: string;
-  descricao: string;
-  adminOnly?: boolean;
-};
-
-const areasCRM: AreaNavegacaoCRM[] = [
-  {
-    id: 'orcamentos',
-    titulo: 'Orçamentos',
-    descricao: 'Abertos'
-  },
-  {
-    id: 'clientes',
-    titulo: 'Clientes',
-    descricao: 'Filtros e cadastro'
-  },
-  {
-    id: 'mapa',
-    titulo: 'Mapa',
-    descricao: 'Localização'
-  },
-  {
-    id: 'administracao',
-    titulo: 'Administração',
-    descricao: 'Usuários',
-    adminOnly: true
-  },
-  {
-    id: 'auditoria',
-    titulo: 'Auditoria',
-    descricao: 'Registros',
-    adminOnly: true
-  }
-];
-
-function NavegacaoAreasCRM({
-  areaAtiva,
-  isAdmin,
-  onChange
-}: {
-  areaAtiva: AreaCRM;
-  isAdmin: boolean;
-  onChange: (area: AreaCRM) => void;
-}) {
-  const areasVisiveis = areasCRM.filter((area) => !area.adminOnly || isAdmin);
-
-  return (
-    <nav
-      aria-label="Áreas do CRM"
-      className="crm-card mb-4 rounded-3xl p-3"
-    >
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        {areasVisiveis.map((area) => {
-          const ativa = areaAtiva === area.id;
-
-          return (
-            <button
-              key={area.id}
-              type="button"
-              onClick={() => onChange(area.id)}
-              aria-current={ativa ? 'page' : undefined}
-              className={`min-h-20 rounded-2xl border px-4 py-3 text-left transition focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-amber-400 ${
-                ativa
-                  ? 'border-[#c58a2a] bg-[#fff7e8] text-slate-950 shadow-sm'
-                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-              }`}
-            >
-              <span className="block text-sm font-extrabold">
-                {area.titulo}
-              </span>
-              <span className="mt-1 block text-xs font-medium text-slate-500">
-                {area.descricao}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </nav>
-  );
-}
-
 function CRMContent() {
   const router = useRouter();
-  const clienteMontado = useSyncExternalStore(
-    assinarMontagemCliente,
-    lerSnapshotClienteMontado,
-    lerSnapshotServidorMontado
-  );
+  const clienteMontado = useClienteMontado();
 
-  const [navegacaoCRM, setNavegacaoCRM] =
-    useState<EstadoNavegacaoCRM>(navegacaoInicialPadrao);
-  const [navegacaoInicialCarregada, setNavegacaoInicialCarregada] = useState(false);
-  const navegacaoCRMRef = useRef<EstadoNavegacaoCRM>(navegacaoCRM);
+  const {
+    navegacaoCRM,
+    navegacaoInicialCarregada,
+    atualizarParametrosNavegacao,
+    resetarNavegacao
+  } = useNavegacaoCRM();
+
   const [areaAtiva, setAreaAtiva] = useState<AreaCRM>('orcamentos');
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      setNavegacaoCRM(lerNavegacaoInicial());
-      setNavegacaoInicialCarregada(true);
-    }, 0);
-
-    return () => window.clearTimeout(timeoutId);
-  }, []);
-
-  useEffect(() => {
-    navegacaoCRMRef.current = navegacaoCRM;
-
-    if (!navegacaoInicialCarregada) {
-      return;
-    }
-
-    if (navegacaoCRM.cliente) {
-      salvarNavegacao(navegacaoCRM);
-    }
-  }, [navegacaoCRM, navegacaoInicialCarregada]);
 
   const clienteParametro = navegacaoCRM.cliente;
   const secaoParametro = navegacaoCRM.aba;
@@ -410,32 +110,6 @@ function CRMContent() {
   const atualizandoClientesEmSegundoPlano = carregandoClientes && possuiClientesEmTela;
   const erroBloqueanteClientes = Boolean(erroClientes) && !possuiClientesEmTela;
 
-  const atualizarParametrosNavegacao = useCallback(
-    (atualizacoes: AtualizacaoParametros) => {
-      const navegacaoAtual = lerNavegacaoDaUrl();
-
-      const proximaNavegacao = normalizarNavegacao({
-        cliente:
-          atualizacoes.cliente !== undefined
-            ? atualizacoes.cliente
-            : navegacaoAtual.cliente,
-        aba:
-          atualizacoes.aba !== undefined
-            ? atualizacoes.aba || 'dados'
-            : navegacaoAtual.aba,
-        orcamento:
-          atualizacoes.orcamento !== undefined
-            ? atualizacoes.orcamento
-            : navegacaoAtual.orcamento
-      });
-
-      escreverNavegacaoNaUrl(proximaNavegacao);
-      salvarNavegacao(proximaNavegacao);
-      setNavegacaoCRM(proximaNavegacao);
-    },
-    []
-  );
-
   useEffect(() => {
     if (!verificandoLogin && !profile) {
       router.push('/login');
@@ -447,73 +121,6 @@ function CRMContent() {
       carregarContatos(clienteSelecionado.id);
     }
   }, [clienteSelecionado?.id, carregarContatos]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return undefined;
-    }
-
-    const salvarEstadoAtualDaTela = () => {
-      const navegacaoAtual = navegacaoCRMRef.current;
-
-      if (navegacaoAtual.cliente) {
-        salvarNavegacao(navegacaoAtual);
-      }
-    };
-
-    const restaurarNavegacaoSalva = () => {
-      const navegacaoUrl = lerNavegacaoDaUrl();
-      const temNavegacaoUrl = navegacaoUrl.cliente || temParametrosDeNavegacaoNaUrl();
-      const navegacaoRestaurada = temNavegacaoUrl
-        ? navegacaoUrl
-        : lerNavegacaoSalva();
-
-      if (!navegacaoRestaurada.cliente) {
-        return;
-      }
-
-      if (!temNavegacaoUrl) {
-        escreverNavegacaoNaUrl(navegacaoRestaurada);
-      }
-
-      salvarNavegacao(navegacaoRestaurada);
-
-      if (!navegacoesIguais(navegacaoCRMRef.current, navegacaoRestaurada)) {
-        setNavegacaoCRM(navegacaoRestaurada);
-      }
-    };
-
-    const aoMudarVisibilidade = () => {
-      if (document.hidden) {
-        salvarEstadoAtualDaTela();
-        return;
-      }
-
-      window.setTimeout(restaurarNavegacaoSalva, 0);
-    };
-
-    const aoMostrarPagina = () => {
-      window.setTimeout(restaurarNavegacaoSalva, 0);
-    };
-
-    if ('scrollRestoration' in window.history) {
-      window.history.scrollRestoration = 'manual';
-    }
-
-    window.addEventListener('blur', salvarEstadoAtualDaTela);
-    window.addEventListener('pagehide', salvarEstadoAtualDaTela);
-    window.addEventListener('focus', aoMostrarPagina);
-    window.addEventListener('pageshow', aoMostrarPagina);
-    document.addEventListener('visibilitychange', aoMudarVisibilidade);
-
-    return () => {
-      window.removeEventListener('blur', salvarEstadoAtualDaTela);
-      window.removeEventListener('pagehide', salvarEstadoAtualDaTela);
-      window.removeEventListener('focus', aoMostrarPagina);
-      window.removeEventListener('pageshow', aoMostrarPagina);
-      document.removeEventListener('visibilitychange', aoMudarVisibilidade);
-    };
-  }, []);
 
   useEffect(() => {
     if (carregandoClientes) {
@@ -537,9 +144,7 @@ function CRMContent() {
       }
 
       if (!clienteEncontrado) {
-        limparNavegacaoSalva();
-        escreverNavegacaoNaUrl(navegacaoInicialPadrao);
-        setNavegacaoCRM(navegacaoInicialPadrao);
+        resetarNavegacao();
         setClienteSelecionado(null);
         setHistoricoInicialAberto(false);
         setOrcamentoHistoricoFoco(null);
@@ -559,11 +164,12 @@ function CRMContent() {
     clientes,
     clienteParametro,
     secaoParametro,
-    orcamentoParametro
+    orcamentoParametro,
+    resetarNavegacao
   ]);
 
   const sair = async () => {
-    limparNavegacaoSalva();
+    resetarNavegacao();
     limparCachesCRM();
     await supabase.auth.signOut();
     router.push('/login');
@@ -643,12 +249,7 @@ function CRMContent() {
     setClienteSelecionado(null);
     setHistoricoInicialAberto(false);
     setOrcamentoHistoricoFoco(null);
-    limparNavegacaoSalva();
-    atualizarParametrosNavegacao({
-      cliente: null,
-      aba: null,
-      orcamento: null
-    });
+    resetarNavegacao();
   };
 
   if (!clienteMontado || !navegacaoInicialCarregada || verificandoLogin) {
@@ -677,7 +278,10 @@ function CRMContent() {
         />
 
         {erroAuth ? (
-          <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div
+            className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+            role="alert"
+          >
             {erroAuth}
           </div>
         ) : null}
@@ -707,13 +311,19 @@ function CRMContent() {
         ) : (
           <>
             {atualizandoClientesEmSegundoPlano ? (
-              <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+              <div
+                className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800"
+                role="status"
+              >
                 Sincronizando dados em segundo plano...
               </div>
             ) : null}
 
             {erroClientes ? (
-              <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div
+                className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+                role="alert"
+              >
                 Não foi possível atualizar os clientes agora. Os dados em tela foram mantidos.
               </div>
             ) : null}
