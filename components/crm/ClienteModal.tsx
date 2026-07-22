@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Cliente, Contato } from '../../types';
-import { montarEnderecoCompleto } from '../../utils/formatters';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import ContatosCliente from './ContatosCliente';
@@ -32,6 +31,7 @@ type ClienteModalProps = {
     telefone?: string;
     email?: string;
     endereco_visita?: string;
+    endereco_padrao?: boolean;
   }) => Promise<Contato | null>;
   onAtualizarContato: (
     id: string,
@@ -125,11 +125,16 @@ export default function ClienteModal({
 
   const alterado = observacoes !== (cliente.observacoes || '');
 
-  const enderecoCompleto = montarEnderecoCompleto({
-    endereco: cliente.endereco,
-    cidade: cliente.cidade,
-    estado: cliente.estado
-  });
+  const contatoEnderecoPadrao = useMemo(
+    () =>
+      contatos.find(
+        (contato) =>
+          Boolean(contato.endereco_padrao) &&
+          Boolean(contato.endereco_visita?.trim())
+      ) || null,
+    [contatos]
+  );
+
 
   const alterarSecaoAtiva = (secao: ClienteModalSecao) => {
     setSecaoAtiva(secao);
@@ -163,7 +168,7 @@ export default function ClienteModal({
         <ClienteDados
           cliente={cliente}
           status={cliente.status || 'Inativo'}
-          enderecoCompleto={enderecoCompleto}
+          contatoEnderecoPadrao={contatoEnderecoPadrao}
         />
       );
     }
@@ -194,52 +199,6 @@ export default function ClienteModal({
       );
     }
 
-    if (secaoAtiva === 'mapa') {
-      return (
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 border-b border-slate-100 pb-3">
-            <h4 className="text-sm font-bold uppercase tracking-widest text-slate-500">
-              Mapa / localização
-            </h4>
-            <p className="mt-1 text-sm text-slate-500">
-              Endereço e acesso rápido à localização do cliente.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                Endereço
-              </p>
-              <p className="mt-1 text-sm font-semibold text-slate-800">
-                {enderecoCompleto || '-'}
-              </p>
-            </div>
-
-            {enderecoCompleto ? (
-              <a
-                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                  enderecoCompleto
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 sm:w-auto"
-              >
-                Abrir no Google Maps
-              </a>
-            ) : (
-              <button
-                type="button"
-                disabled
-                className="w-full rounded-2xl bg-slate-200 px-4 py-3 text-sm font-bold text-slate-500 sm:w-auto"
-              >
-                Sem endereço cadastrado
-              </button>
-            )}
-          </div>
-        </section>
-      );
-    }
 
     return (
       <ClienteObservacoes
@@ -266,15 +225,24 @@ export default function ClienteModal({
           </div>
 
           <div className="flex gap-2">
-            <Button type="button" variant="secondary" onClick={onClose}>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={onClose}
+            >
               Fechar
             </Button>
             <Button
               type="button"
+              variant="primary"
+              size="sm"
               onClick={salvar}
-              disabled={!alterado || salvando}
+              disabled={!alterado}
+              loading={salvando}
+              loadingText="Salvando..."
             >
-              {salvando ? 'Salvando...' : 'Salvar alterações'}
+              Salvar alterações
             </Button>
           </div>
         </div>

@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Mini CRM Mapa',
-  description: 'CRM comercial com mapa de clientes e importação ERP'
+  title: 'CRM Friese | Painel Comercial',
+  description: 'CRM Friese para gestão comercial, clientes e orçamentos'
 };
 
 export default function RootLayout({

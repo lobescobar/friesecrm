@@ -8,7 +8,6 @@ export const secoesCliente: ClienteModalSecao[] = [
   'dados',
   'contatos',
   'historico',
-  'mapa',
   'observacoes'
 ];
 

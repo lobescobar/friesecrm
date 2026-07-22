@@ -13,10 +13,13 @@ export const INDICES_ORCAMENTOS_FIXOS: IndicesPlanilha = {
   loja: 2, // Coluna C — Loja
   descricao: 5, // Coluna F — Descricao
   quantidade: 6, // Coluna G — Quantidade
+  valorTotal: 8, // Coluna I — Vlr.Total
   status: 9, // Coluna J — Status
   pedidoVenda: 11, // Coluna L — Pedido Venda
   dataFechamento: 12, // Coluna M — Fechamento
-  dataEmissao: 13 // Coluna N — DT Emissao
+  dataEmissao: 13, // Coluna N — DT Emissao
+  ramo: 15, // Coluna P — Ramo / Área
+  dataCancelamento: 17 // Coluna R — Data Canc.
 };
 
 export const resumoOrcamentosInicial: ResumoOrcamentos = {
@@ -247,6 +250,7 @@ export function obterHeadersFixosOrcamentos() {
     'Loja',
     'Descricao',
     'Quantidade',
+    'Vlr.Total',
     'Status',
     'Pedido Venda',
     'Fechamento',

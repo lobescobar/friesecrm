@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabase';
+import Button from '../../components/ui/Button';
 
 function IconeSenha({ visivel }: { visivel: boolean }) {
   if (visivel) {
@@ -190,22 +191,28 @@ export default function Login() {
             </div>
           ) : null}
 
-          <button
+          <Button
             type="submit"
-            disabled={carregando}
-            className="mt-2 inline-flex min-h-12 w-full items-center justify-center rounded-xl border border-[#0b1225] bg-[#0b1225] px-4 py-3 font-bold text-white shadow-sm transition hover:border-[#172033] hover:bg-[#172033] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+            variant="primary"
+            size="lg"
+            fullWidth
+            loading={carregando}
+            loadingText="Entrando..."
+            className="mt-2"
           >
-            {carregando ? 'Entrando...' : 'Entrar'}
-          </button>
+            Entrar
+          </Button>
 
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={handleRecuperarSenha}
             disabled={carregando}
-            className="self-center rounded-lg px-3 py-2 text-xs font-bold text-[#0b4aa0] transition hover:bg-blue-50 hover:underline disabled:opacity-60"
+            className="self-center text-[#0b4aa0] hover:underline"
           >
             Esqueceu a senha?
-          </button>
+          </Button>
         </form>
       </section>
     </main>

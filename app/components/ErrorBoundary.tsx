@@ -1,6 +1,7 @@
 "use client";
 
 import React, { Component, ReactNode } from "react";
+import Button from "../../components/ui/Button";
 
 type ErrorBoundaryProps = {
   children: ReactNode;
@@ -48,13 +49,14 @@ export default class ErrorBoundary extends Component<
               Algo inesperado aconteceu ao carregar esta página.
             </p>
 
-            <button
+            <Button
               type="button"
+              variant="primary"
+              size="md"
               onClick={() => window.location.reload()}
-              className="bg-slate-900 text-white px-5 py-3 rounded-xl text-sm font-semibold hover:bg-slate-800 transition"
             >
               Recarregar página
-            </button>
+            </Button>
           </div>
         </div>
       );

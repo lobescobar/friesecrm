@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useHistoricoCliente } from '../../hooks/useHistoricoCliente';
 import { useInteracoesOrcamento } from '../../hooks/useInteracoesOrcamento';
+import { supabase } from '../../lib/supabase';
 import type {
   ColunaOrdenacao,
   DirecaoOrdenacao,
@@ -18,7 +19,6 @@ import {
 } from '../../utils/historicoOrcamentos';
 import {
   buscarEmailCancelamentoConfigurado,
-  montarUrlEmailCancelamento,
   obterEmailCancelamentoFallback
 } from '../../utils/cancelamentoOrcamentos';
 import LoadingSpinner from '../ui/LoadingSpinner';
@@ -68,6 +68,8 @@ export default function HistoricoCliente({
   const [emailCancelamento, setEmailCancelamento] = useState(
     obterEmailCancelamentoFallback(clienteSegmento)
   );
+  const [enviandoCancelamento, setEnviandoCancelamento] = useState(false);
+  const [chaveIdempotencia, setChaveIdempotencia] = useState('');
 
   const {
     interacoesOrcamento,
@@ -264,6 +266,7 @@ export default function HistoricoCliente({
     setMotivoCancelamento('');
     setErroCancelamento(null);
     setMensagemCancelamento(null);
+    setChaveIdempotencia(crypto.randomUUID());
   };
 
   const fecharSolicitacaoCancelamento = () => {
@@ -272,8 +275,8 @@ export default function HistoricoCliente({
     setErroCancelamento(null);
   };
 
-  const confirmarSolicitacaoCancelamento = () => {
-    if (!orcamentoCancelamento) return;
+  const confirmarSolicitacaoCancelamento = async () => {
+    if (!orcamentoCancelamento || enviandoCancelamento) return;
 
     const motivo = motivoCancelamento.trim();
 
@@ -284,20 +287,62 @@ export default function HistoricoCliente({
       return;
     }
 
-    const solicitante = usuarioEmail || 'Usuário não identificado no CRM';
+    setEnviandoCancelamento(true);
+    setErroCancelamento(null);
 
-    window.location.href = montarUrlEmailCancelamento({
-      numeroOrcamento: orcamentoCancelamento.numero_orcamento,
-      solicitante,
-      motivo,
-      destinatario: emailCancelamento,
-      segmentoCliente: clienteSegmento
-    });
+    try {
+      const {
+        data: { session },
+        error: erroSessao
+      } = await supabase.auth.getSession();
 
-    setMensagemCancelamento(
-      `E-mail de solicitação preparado para o orçamento ${orcamentoCancelamento.numero_orcamento}. Confirme o envio no seu aplicativo de e-mail.`
-    );
-    fecharSolicitacaoCancelamento();
+      if (erroSessao || !session?.access_token) {
+        throw new Error('Sua sessão expirou. Entre novamente no CRM.');
+      }
+
+      const resposta = await fetch(
+        '/api/orcamentos/solicitar-cancelamento',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            clienteId,
+            numeroOrcamento: orcamentoCancelamento.numero_orcamento,
+            motivo,
+            segmentoCliente: clienteSegmento,
+            chaveIdempotencia: chaveIdempotencia || crypto.randomUUID()
+          })
+        }
+      );
+
+      const resultado = (await resposta.json()) as {
+        ok?: boolean;
+        error?: string;
+        destinatarios?: string[];
+      };
+
+      if (!resposta.ok || !resultado.ok) {
+        throw new Error(
+          resultado.error || 'Não foi possível enviar a solicitação.'
+        );
+      }
+
+      setMensagemCancelamento(
+        `Solicitação de cancelamento do orçamento ${orcamentoCancelamento.numero_orcamento} enviada automaticamente para ${resultado.destinatarios?.join(', ') || emailCancelamento}.`
+      );
+      fecharSolicitacaoCancelamento();
+    } catch (erro) {
+      setErroCancelamento(
+        erro instanceof Error
+          ? erro.message
+          : 'Erro inesperado ao enviar a solicitação.'
+      );
+    } finally {
+      setEnviandoCancelamento(false);
+    }
   };
 
   if (!aberto) {
@@ -441,6 +486,7 @@ export default function HistoricoCliente({
           solicitante={usuarioEmail || 'Usuário não identificado'}
           motivo={motivoCancelamento}
           erro={erroCancelamento}
+          enviando={enviandoCancelamento}
           onMotivoChange={(valor) => {
             setMotivoCancelamento(valor);
             setErroCancelamento(null);

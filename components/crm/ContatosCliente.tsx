@@ -26,6 +26,7 @@ type ContatosClienteProps = {
     telefone?: string;
     email?: string;
     endereco_visita?: string;
+    endereco_padrao?: boolean;
   }) => Promise<Contato | null>;
   onAtualizar: (id: string, dados: Partial<Contato>) => Promise<Contato | null>;
   onExcluir: (id: string) => Promise<boolean>;
@@ -94,7 +95,11 @@ export default function ContatosCliente({
       cargo: novoContato.cargo.trim() || undefined,
       telefone: novoContato.telefone.trim() || undefined,
       email: novoContato.email.trim() || undefined,
-      endereco_visita: novoContato.endereco_visita.trim() || undefined
+      endereco_visita: novoContato.endereco_visita.trim() || undefined,
+      endereco_padrao:
+        contatos.length === 0 && Boolean(novoContato.endereco_visita.trim())
+          ? true
+          : undefined
     });
 
     setSalvando(false);
@@ -159,8 +164,57 @@ export default function ContatosCliente({
     );
   };
 
+  const definirEnderecoPadrao = async (contatoSelecionado: Contato) => {
+    if (!contatoSelecionado.endereco_visita?.trim()) {
+      setMensagem('Informe um endereço de visita antes de marcar como padrão.');
+      return;
+    }
+
+    setSalvando(true);
+    setMensagem(null);
+
+    try {
+      const contatosParaDesmarcar = contatos.filter(
+        (contato) => contato.id !== contatoSelecionado.id && contato.endereco_padrao
+      );
+
+      for (const contato of contatosParaDesmarcar) {
+        const atualizado = await onAtualizar(contato.id, { endereco_padrao: false });
+
+        if (!atualizado) {
+          throw new Error('Não foi possível desmarcar o endereço padrão anterior.');
+        }
+      }
+
+      const contatoAtualizado = await onAtualizar(contatoSelecionado.id, {
+        endereco_padrao: true
+      });
+
+      if (!contatoAtualizado) {
+        throw new Error('Não foi possível marcar o endereço como padrão.');
+      }
+
+      setMensagem('Endereço padrão atualizado com sucesso.');
+    } catch (error) {
+      const erro =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível atualizar o endereço padrão.';
+      setMensagem(erro);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
   const textoMensagem = mensagem || erro;
   const mensagemErro = mensagemEhErro(mensagem, erro);
+  const contatosOrdenados = [...contatos].sort((a, b) => {
+    if (a.endereco_padrao === b.endereco_padrao) {
+      return a.nome.localeCompare(b.nome, 'pt-BR');
+    }
+
+    return a.endereco_padrao ? -1 : 1;
+  });
 
   return (
     <section aria-labelledby={tituloId} className="space-y-4">
@@ -304,7 +358,7 @@ export default function ContatosCliente({
             Nenhum contato cadastrado.
           </div>
         ) : (
-          contatos.map((contato) => {
+          contatosOrdenados.map((contato) => {
             const whatsapp = montarLinkWhatsapp(contato.telefone);
             const editando = editandoId === contato.id;
 
@@ -436,15 +490,49 @@ export default function ContatosCliente({
                       ) : null}
 
                       {contato.endereco_visita ? (
-                        <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                            Endereço de visita
-                          </p>
-                          <p className="mt-1 whitespace-pre-line text-sm font-medium text-slate-700">
-                            {contato.endereco_visita}
-                          </p>
+                        <div
+                          className={`mt-3 rounded-xl border px-3 py-2 ${
+                            contato.endereco_padrao
+                              ? 'border-amber-200 bg-amber-50'
+                              : 'border-slate-100 bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                Endereço de visita
+                              </p>
+                              <p className="mt-1 whitespace-pre-line text-sm font-medium text-slate-700">
+                                {contato.endereco_visita}
+                              </p>
+                            </div>
+
+                            {contato.endereco_padrao ? (
+                              <span
+                                className="inline-flex h-[30px] items-center rounded-lg border border-amber-300 bg-amber-100 px-[10px] text-sm font-semibold leading-none text-amber-800"
+                                aria-label="Este é o endereço padrão de visita"
+                              >
+                                Padrão
+                              </span>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => definirEnderecoPadrao(contato)}
+                                disabled={salvando}
+                                aria-label={`Usar endereço de ${contato.nome} como padrão`}
+                              >
+                                Usar como padrão
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                      ) : null}
+                      ) : (
+                        <p className="mt-3 text-xs text-slate-400">
+                          Sem endereço de visita cadastrado.
+                        </p>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap justify-end gap-2">

@@ -48,9 +48,9 @@ export default function NavegacaoAreasCRM({
   return (
     <nav
       aria-label="Áreas do CRM"
-      className="crm-card mb-4 rounded-3xl p-3"
+      className="crm-card mb-4 rounded-3xl p-2 lg:flex lg:h-[74px] lg:items-center"
     >
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid w-full gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {areasVisiveis.map((area) => {
           const ativa = areaAtiva === area.id;
 
@@ -60,16 +60,16 @@ export default function NavegacaoAreasCRM({
               type="button"
               onClick={() => onChange(area.id)}
               aria-current={ativa ? 'page' : undefined}
-              className={`min-h-20 rounded-2xl border px-4 py-3 text-left transition focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-amber-400 ${
+              className={`h-[58px] rounded-2xl border px-4 py-2 text-left transition focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-amber-400 ${
                 ativa
                   ? 'border-[#c58a2a] bg-[#fff7e8] text-slate-950 shadow-sm'
                   : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
               }`}
             >
-              <span className="block text-sm font-extrabold">
+              <span className="block text-sm font-extrabold leading-tight">
                 {area.titulo}
               </span>
-              <span className="mt-1 block text-xs font-medium text-slate-500">
+              <span className="mt-1 block text-xs font-medium leading-tight text-slate-500">
                 {area.descricao}
               </span>
             </button>

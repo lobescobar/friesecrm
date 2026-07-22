@@ -90,7 +90,7 @@ export default function ClienteResumo({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {whatsappEmpresa ? (
           <a
             href={whatsappEmpresa}
@@ -109,14 +109,6 @@ export default function ClienteResumo({
             Sem telefone
           </button>
         )}
-
-        <button
-          type="button"
-          onClick={() => onAbrirSecao('mapa')}
-          className="rounded-2xl border border-amber-200 bg-amber-50 py-3 text-sm font-bold text-amber-800 transition hover:bg-amber-100"
-        >
-          Ver localização
-        </button>
 
         <button
           type="button"

@@ -9,6 +9,7 @@ type ModalCancelamentoOrcamentoProps = {
   solicitante: string;
   motivo: string;
   erro: string | null;
+  enviando: boolean;
   onMotivoChange: (motivo: string) => void;
   onClose: () => void;
   onConfirmar: () => void;
@@ -21,6 +22,7 @@ export default function ModalCancelamentoOrcamento({
   solicitante,
   motivo,
   erro,
+  enviando,
   onMotivoChange,
   onClose,
   onConfirmar
@@ -33,12 +35,22 @@ export default function ModalCancelamentoOrcamento({
       scrollKey={`cancelamento:${clienteId}:${orcamento.numero_orcamento}`}
       footer={
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={onClose}
+            disabled={enviando}
+          >
             Voltar
           </Button>
 
-          <Button type="button" variant="danger" onClick={onConfirmar}>
-            Preparar e-mail
+          <Button
+            type="button"
+            variant="danger"
+            onClick={onConfirmar}
+            disabled={enviando}
+          >
+            {enviando ? 'Enviando...' : 'Enviar solicitação'}
           </Button>
         </div>
       }
@@ -49,9 +61,8 @@ export default function ModalCancelamentoOrcamento({
             Esta ação não altera o status do orçamento no CRM nem no ERP.
           </p>
           <p className="mt-1">
-            Ela prepara um e-mail para solicitar o cancelamento ao endereço{' '}
-            {emailCancelamento}. O envio será confirmado no seu aplicativo de
-            e-mail.
+            Ela envia automaticamente um e-mail de solicitação para o vendedor
+            e para o destino administrativo {emailCancelamento}.
           </p>
         </div>
 
@@ -87,6 +98,7 @@ export default function ModalCancelamentoOrcamento({
           <textarea
             value={motivo}
             onChange={(event) => onMotivoChange(event.target.value)}
+            disabled={enviando}
             rows={5}
             className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-slate-500"
             placeholder="Descreva o motivo do cancelamento..."
