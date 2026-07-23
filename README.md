@@ -1,31 +1,69 @@
 # Mini CRM Mapa
 
-Sistema comercial em Next.js para consulta de clientes, mapa, contatos, alçadas de usuário e importação de planilhas ERP.
+Sistema comercial em Next.js para consulta de clientes, mapa, contatos, alçadas de usuário, importação de planilhas ERP, orçamentos e gestão administrativa.
 
-## O que foi estabilizado nesta versão
+---
 
-- A rota `/` redireciona para `/crm`, mantendo uma tela principal única.
-- O frontend foi dividido em componentes de CRM e componentes base de UI.
-- A importação ERP ganhou fluxo guiado com prévia, colunas reconhecidas, resumo antes da gravação e resultado final sem `alert()`.
-- A rota administrativa `/api/admin/create-user` valida o token do usuário e só permite criação por administradores.
-- O modal do cliente agora salva observações e status com feedback visual.
-- A tabela ganhou versão em cards para celular.
-- Foram adicionados estados de carregamento, erro e vazio.
-- A gestão de usuários passou a usar seleção de segmentos e estados, evitando texto livre.
-- O mapa ganhou legenda, enquadramento automático dos clientes filtrados e integração com o modal.
-- O projeto não deve versionar nem enviar `.env.local`, `.env`, `.git`, `.next`, `node_modules` ou `tsconfig.tsbuildinfo`.
+## Resumo do sistema
+
+O Mini CRM Mapa centraliza informações comerciais de clientes e orçamentos, com recursos para:
+
+- Consultar clientes.
+- Visualizar clientes no mapa.
+- Importar clientes a partir de planilhas ERP.
+- Importar orçamentos.
+- Consultar histórico de clientes.
+- Gerenciar contatos.
+- Controlar usuários e permissões.
+- Acompanhar funil de orçamentos.
+- Registrar auditoria administrativa.
+- Trabalhar com dados armazenados no Supabase.
+
+---
+
+## Tecnologias principais
+
+- Next.js
+- React
+- TypeScript
+- Supabase
+- Leaflet / React Leaflet
+- XLSX
+- Microsoft Graph, quando configurado
+
+---
 
 ## Variáveis de ambiente
 
-Copie `.env.example` para `.env.local` e preencha com os valores reais:
+Copie `.env.example` para `.env.local` e preencha com os valores reais somente no ambiente local, servidor ou Vercel.
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+
+MICROSOFT_TENANT_ID=
+MICROSOFT_CLIENT_ID=
+MICROSOFT_CLIENT_SECRET=
+MICROSOFT_MAIL_SENDER=
 ```
 
-A `SUPABASE_SERVICE_ROLE_KEY` deve ficar somente no servidor. Nunca publique essa chave em repositório público, prints, frontend ou arquivos enviados a terceiros.
+A `SUPABASE_SERVICE_ROLE_KEY` deve ficar somente no servidor. Nunca publique essa chave em repositório público, prints, frontend, ZIP enviado a terceiros ou arquivos compartilhados.
+
+Arquivos que não devem ser enviados ou versionados:
+
+```txt
+.env
+.env.local
+.env.production
+.env*.backup
+.git
+.next
+node_modules
+tsconfig.tsbuildinfo
+```
+
+---
 
 ## Instalação
 
@@ -33,13 +71,15 @@ A `SUPABASE_SERVICE_ROLE_KEY` deve ficar somente no servidor. Nunca publique ess
 npm install
 ```
 
+---
+
 ## Desenvolvimento
 
 ```bash
 npm run dev
 ```
 
-Abra:
+Abra no navegador:
 
 ```txt
 http://localhost:3000
@@ -51,9 +91,11 @@ A rota inicial redireciona para:
 http://localhost:3000/crm
 ```
 
-## Validação
+---
 
-Antes de publicar, rode:
+## Validação antes de publicar
+
+Antes de publicar ou enviar uma versão final, rode:
 
 ```bash
 npm run lint
@@ -61,41 +103,80 @@ npm run typecheck
 npm run build
 ```
 
-Nesta versão, `npm run lint` e `npm run typecheck` foram validados no ambiente de revisão. O `npm run build` deve ser rodado em ambiente limpo com dependências instaladas para o sistema operacional local, porque o pacote original continha `node_modules` gerado no Windows.
+Se algum comando apresentar erro, corrija antes de fazer deploy.
+
+---
 
 ## Observações importantes sobre o banco
 
-A importação ERP usa `upsert` com:
+A importação ERP usa `upsert` com conflito por:
 
 ```txt
 onConflict: "codigo_cliente"
 ```
 
-Neste projeto, `codigo_cliente` deve representar a chave segura **Código + Loja**. Portanto, a coluna `codigo_cliente` precisa ter índice único no Supabase considerando essa chave composta normalizada. Se não houver índice único, a importação pode falhar.
+Neste projeto, `codigo_cliente` deve representar a chave segura usada para relacionar a planilha ERP com o cadastro do cliente.
+
+Antes de alterar tabelas, índices ou regras no Supabase, faça backup do banco e revise os scripts SQL envolvidos.
+
+---
+
+## Estrutura principal de pastas
+
+```txt
+app/           Rotas, páginas e APIs do Next.js
+components/    Componentes visuais e módulos do CRM
+hooks/         Hooks React reutilizáveis
+lib/           Integrações, Supabase, importações e regras auxiliares
+types/         Tipagens TypeScript
+utils/         Funções utilitárias
+public/        Arquivos públicos
+sql/           Scripts SQL auxiliares
+supabase/      Scripts, migrations, checks e diagnósticos
+docs/          Documentação técnica e histórico
+```
+
+---
 
 ## Arquivos importantes
 
 ```txt
 app/crm/page.tsx
 components/crm/ImportarERP.tsx
-components/crm/ClienteModal.tsx
-components/crm/TabelaClientes.tsx
-components/crm/FiltrosClientes.tsx
-components/crm/GestaoUsuarios.tsx
+components/crm/ImportarOrcamentos.tsx
 components/crm/MapaClientes.tsx
+components/crm/GestaoUsuarios.tsx
 hooks/useClientes.ts
-hooks/useContatos.ts
-hooks/useAuth.ts
-app/api/admin/create-user/route.ts
+hooks/useFunilOrcamentos.ts
 lib/supabase.ts
+lib/importacaoERPClientes.ts
+lib/importacaoOrcamentos.ts
+types/cliente.ts
 ```
 
-## Backup recomendado
+---
 
-Antes de novas alterações grandes, crie uma cópia da pasta com nome semelhante a:
+## Histórico técnico
+
+O histórico consolidado do projeto está em:
 
 ```txt
-backup-mini-crm-mapa-versao-corrigida-base-solida
+docs/historico/HISTORICO_GERAL_CRM.md
 ```
 
-Não substitua backups antigos sem confirmar que a versão nova está funcionando.
+Os arquivos antigos de etapas, correções, instruções e checklists foram arquivados em:
+
+```txt
+docs/historico/arquivados/
+```
+
+---
+
+## Boas práticas do projeto
+
+- Fazer backup antes de alterações importantes.
+- Não publicar arquivos `.env` reais.
+- Não enviar `node_modules`, `.next`, `.git` ou caches em ZIPs finais.
+- Manter a raiz limpa, com apenas arquivos essenciais.
+- Registrar alterações relevantes no histórico técnico.
+- Testar `lint`, `typecheck` e `build` antes de publicar.

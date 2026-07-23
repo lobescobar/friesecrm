@@ -1,0 +1,41 @@
+PATCH ETAPA 14Z — ENVIO AUTOMÁTICO DE SOLICITAÇÃO DE CANCELAMENTO
+
+ANTES:
+Crie backup-mini-crm-mapa-antes-etapa14Z-email-cancelamento-automatico.
+
+ARQUIVOS PARA SUBSTITUIR:
+- components/crm/HistoricoCliente.tsx
+- components/crm/historico/ModalCancelamentoOrcamento.tsx
+- utils/cancelamentoOrcamentos.ts
+
+ARQUIVOS NOVOS:
+- app/api/orcamentos/solicitar-cancelamento/route.ts
+- lib/microsoftGraph.ts
+- sql/etapa14Z-solicitacoes-cancelamento-email.sql
+- .env.microsoft365.example
+
+REGRA:
+- O CRM apenas envia uma solicitação; não cancela o orçamento.
+- Somente orçamento status A pode gerar solicitação.
+- Destinatários: vendedor/usuário solicitante + destino administrativo por segmento.
+- Destino padrão é usado quando não existe regra específica.
+- Envio via Microsoft Graph, usando conta @friese.com.br.
+- A chave de idempotência evita duplicidade da mesma confirmação.
+
+ORDEM SEGURA:
+1. Substituir/adicionar os arquivos.
+2. Executar npm run build.
+3. NÃO testar o botão ainda.
+4. Fazer backup do banco.
+5. Executar manualmente o SQL.
+6. Criar aplicativo no Microsoft Entra ID.
+7. Conceder permissão Application: Mail.Send e consentimento do administrador.
+8. Limitar o aplicativo à caixa remetente no Exchange/Microsoft 365, quando disponível.
+9. Configurar em .env.local:
+   MICROSOFT_TENANT_ID
+   MICROSOFT_CLIENT_ID
+   MICROSOFT_CLIENT_SECRET
+   MICROSOFT_MAIL_SENDER
+10. Reiniciar npm run dev.
+11. Testar primeiro com um orçamento de teste e destinatários controlados.
+12. Executar npm run build novamente.

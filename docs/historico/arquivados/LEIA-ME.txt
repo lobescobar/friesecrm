@@ -1,0 +1,33 @@
+PATCH ETAPA 15A — RENOMEAÇÃO VISUAL PARA CRM FRIESE
+
+Arquivo para substituir completamente:
+- app/layout.tsx
+
+Alterações:
+- Título da aba/navegador:
+  Mini CRM Mapa
+  para
+  CRM Friese | Painel Comercial
+
+- Descrição da aplicação:
+  CRM Friese para gestão comercial, clientes e orçamentos
+
+Não foram alterados:
+- package.json
+- nome da pasta
+- repositório
+- banco de dados
+- tabelas
+- URLs
+- variáveis de ambiente
+- nomes de cache
+- documentação histórica
+- registros anteriores
+
+Aplicação:
+1. Faça backup de app/layout.tsx.
+2. Substitua o arquivo completo.
+3. Pare o servidor com Ctrl+C.
+4. Execute npm run build.
+5. Execute npm run dev.
+6. Confira o título da aba do navegador.
