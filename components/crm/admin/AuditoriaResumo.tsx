@@ -28,28 +28,23 @@ export default function AuditoriaResumo({ logs }: AuditoriaResumoProps) {
   const cards = [
     {
       titulo: 'Eventos listados',
-      valor: total,
-      descricao: 'Registros retornados pelos filtros atuais'
+      valor: total
     },
     {
       titulo: 'Importações',
-      valor: importacoes,
-      descricao: 'ERP e orçamentos registrados'
+      valor: importacoes
     },
     {
       titulo: 'Contatos',
-      valor: contatos,
-      descricao: 'Inclusões, edições e exclusões'
+      valor: contatos
     },
     {
       titulo: 'Observações',
-      valor: observacoes,
-      descricao: 'Alterações no campo observações'
+      valor: observacoes
     },
     {
       titulo: 'Últimas 24h',
-      valor: ultimas24h,
-      descricao: 'Eventos recentes na lista atual'
+      valor: ultimas24h
     }
   ];
 
@@ -59,18 +54,15 @@ export default function AuditoriaResumo({ logs }: AuditoriaResumoProps) {
         {cards.map((card) => (
           <article
             key={card.titulo}
-            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-            aria-label={`${card.titulo}: ${card.valor.toLocaleString(
-              'pt-BR'
-            )}. ${card.descricao}`}
+            className="flex h-[58px] flex-col justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
+            aria-label={`${card.titulo}: ${card.valor.toLocaleString('pt-BR')}`}
           >
             <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
               {card.titulo}
             </p>
-            <p className="mt-2 text-2xl font-bold text-slate-900">
+            <p className="mt-1 text-2xl font-bold leading-none text-slate-900">
               {card.valor.toLocaleString('pt-BR')}
             </p>
-            <p className="mt-1 text-xs text-slate-500">{card.descricao}</p>
           </article>
         ))}
       </div>

@@ -12,10 +12,13 @@ export type HistoricoImportacao = {
   pedido_venda: string | null;
   descricao_item: string | null;
   quantidade_item: number | null;
+  valor_total: number | null;
   status: StatusOrcamentoImportacao;
   status_descricao: string;
   data_emissao: string;
   data_fechamento: string | null;
+  data_cancelamento: string | null;
+  ramo: string | null;
   origem_importacao: string;
 };
 
@@ -57,9 +60,12 @@ export type IndicesPlanilha = {
   pedidoVenda: number;
   descricao: number;
   quantidade: number;
+  valorTotal: number;
   status: number;
   dataEmissao: number;
   dataFechamento: number;
+  dataCancelamento: number;
+  ramo: number;
 };
 
 export type ProcessamentoPlanilhaOrcamentos = {

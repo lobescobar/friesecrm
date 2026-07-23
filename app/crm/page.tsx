@@ -23,6 +23,7 @@ import ClienteModal from '../../components/crm/ClienteModal';
 import GestaoUsuarios from '../../components/crm/GestaoUsuarios';
 import AuditoriaAdmin from '../../components/crm/admin/AuditoriaAdmin';
 import AlertaOrcamentosAbertos from '../../components/crm/AlertaOrcamentosAbertos';
+import FunilOrcamentos from '../../components/crm/FunilOrcamentos';
 import NavegacaoAreasCRM from '../../components/crm/pagina/NavegacaoAreasCRM';
 import { OrcamentoAbertoResumo } from '../../hooks/useOrcamentosAbertos';
 import type { ClienteModalSecao } from '../../components/crm/cliente-modal/ClienteModalNav';
@@ -393,7 +394,12 @@ function CRMContent() {
             {(areaAtiva === 'orcamentos' ||
               (!isAdmin &&
                 (areaAtiva === 'administracao' || areaAtiva === 'auditoria'))) ? (
-              <section className="crm-card overflow-hidden rounded-3xl p-4">
+              <section className="crm-card space-y-4 overflow-hidden rounded-3xl p-2">
+                <FunilOrcamentos
+                  isAdmin={isAdmin}
+                  refreshKey={versaoOrcamentosAbertos}
+                />
+
                 <AlertaOrcamentosAbertos
                   refreshKey={versaoOrcamentosAbertos}
                   mostrarVazio

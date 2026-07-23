@@ -26,9 +26,9 @@ const colunasOrdenaveis: Array<{
   rotulo: string;
 }> = [
   { coluna: 'numero_orcamento', rotulo: 'Orçamento' },
-  { coluna: 'data_emissao', rotulo: 'Data de emissão' },
-  { coluna: 'pedido_venda', rotulo: 'Pedido de venda' },
-  { coluna: 'data_fechamento', rotulo: 'Data de fechamento' }
+  { coluna: 'data_emissao', rotulo: 'Emissão' },
+  { coluna: 'pedido_venda', rotulo: 'Pedido' },
+  { coluna: 'data_fechamento', rotulo: 'Fechamento' }
 ];
 
 export default function TabelaHistoricoOrcamentos({
@@ -64,7 +64,7 @@ export default function TabelaHistoricoOrcamentos({
                   <button
                     type="button"
                     onClick={() => onOrdenar(coluna)}
-                    className="inline-flex items-center gap-1 font-bold"
+                    className="inline-flex items-center gap-1 whitespace-nowrap font-bold leading-none"
                     aria-label={`Ordenar histórico por ${rotulo}`}
                   >
                     {rotulo}{' '}
@@ -125,6 +125,9 @@ export default function TabelaHistoricoOrcamentos({
                   <td className="px-4 py-3 text-right">
                     <Button
                       type="button"
+                      variant="primary"
+                      size="sm"
+                      className="h-[30px] min-h-[30px] px-[10px] py-0 text-sm leading-none"
                       onClick={() => onAbrirHistoricoManual(item)}
                       aria-label={`Abrir histórico do orçamento ${item.numero_orcamento}`}
                     >
@@ -207,7 +210,10 @@ export default function TabelaHistoricoOrcamentos({
               <div className="mt-3">
                 <Button
                   type="button"
-                  className="w-full"
+                  variant="primary"
+                  size="sm"
+                  className="h-[30px] min-h-[30px] px-[10px] py-0 text-sm leading-none"
+                  fullWidth
                   onClick={() => onAbrirHistoricoManual(item)}
                   aria-label={`Abrir histórico do orçamento ${item.numero_orcamento}`}
                 >

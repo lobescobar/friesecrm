@@ -13,7 +13,6 @@ import {
   StatusOrcamentoImportacao
 } from '../types/importacaoOrcamentos';
 import {
-  calcularDataLimiteHistoricoOrcamentos,
   converterDataParaIso,
   converterNumeroParaBanco,
   INDICE_CABECALHO_ORCAMENTOS_PADRAO,
@@ -29,6 +28,88 @@ import {
   separarNumeroOrcamento,
   texto
 } from '../utils/importacaoOrcamentos';
+
+
+function normalizarCabecalhoOrcamento(valor: unknown) {
+  return String(valor ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toLowerCase();
+}
+
+function localizarIndiceDataCancelamento(
+  rows: unknown[][],
+  indiceCabecalhoPadrao: number
+) {
+  const nomesAceitos = new Set([
+    'datacancela',
+    'datacancelamento',
+    'dtcancela',
+    'dtcancelamento',
+    'cancelamento'
+  ]);
+
+  const inicio = Math.max(0, indiceCabecalhoPadrao - 3);
+  const fim = Math.min(rows.length, indiceCabecalhoPadrao + 4);
+
+  for (let indiceLinha = inicio; indiceLinha < fim; indiceLinha += 1) {
+    const linha = rows[indiceLinha] || [];
+
+    for (let indiceColuna = 0; indiceColuna < linha.length; indiceColuna += 1) {
+      if (nomesAceitos.has(normalizarCabecalhoOrcamento(linha[indiceColuna]))) {
+        return indiceColuna;
+      }
+    }
+  }
+
+  // Regra oficial do ERP: coluna R. Como o array começa em zero, R = 17.
+  return 17;
+}
+
+function converterDataCancelamentoParaIso(valor: unknown) {
+  const conversaoPadrao = converterDataParaIso(valor);
+
+  if (conversaoPadrao) {
+    return conversaoPadrao;
+  }
+
+  if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
+    const ano = valor.getFullYear();
+    const mes = String(valor.getMonth() + 1).padStart(2, '0');
+    const dia = String(valor.getDate()).padStart(2, '0');
+
+    return `${ano}-${mes}-${dia}`;
+  }
+
+  if (typeof valor === 'number' && Number.isFinite(valor)) {
+    const partes = XLSX.SSF.parse_date_code(valor);
+
+    if (partes?.y && partes?.m && partes?.d) {
+      return `${String(partes.y).padStart(4, '0')}-${String(partes.m).padStart(2, '0')}-${String(partes.d).padStart(2, '0')}`;
+    }
+  }
+
+  const textoData = String(valor ?? '').trim();
+
+  if (!textoData) {
+    return null;
+  }
+
+  const brasileira = textoData.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})(?:\s|$)/);
+
+  if (brasileira) {
+    return `${brasileira[3]}-${brasileira[2].padStart(2, '0')}-${brasileira[1].padStart(2, '0')}`;
+  }
+
+  const iso = textoData.match(/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})(?:T|\s|$)/);
+
+  if (iso) {
+    return `${iso[1]}-${iso[2].padStart(2, '0')}-${iso[3].padStart(2, '0')}`;
+  }
+
+  return null;
+}
 
 function calcularDataLimiteStatusCliente() {
   const data = new Date();
@@ -151,17 +232,41 @@ function montarRegistrosProcessados(
   // C = Loja
   // F = Descricao
   // G = Quantidade
+  // I = Vlr.Total
   // J = Status
   // L = Pedido Venda
   // M = Fechamento
   // N = DT Emissao
+  // P = Ramo / Área
+  // R = Data Cancela
   const indiceCabecalho = INDICE_CABECALHO_ORCAMENTOS_PADRAO;
-  const indices = INDICES_ORCAMENTOS_FIXOS;
-  const dataLimite = calcularDataLimiteHistoricoOrcamentos();
-
+  const indiceDataCancelamento = localizarIndiceDataCancelamento(
+    rows,
+    indiceCabecalho
+  );
+  const indices = {
+    ...INDICES_ORCAMENTOS_FIXOS,
+    numeroIt: 0,
+    cliente: 1,
+    loja: 2,
+    descricao: 5,
+    quantidade: 6,
+    valorTotal: 8,
+    status: 9,
+    pedidoVenda: 11,
+    dataFechamento: 12,
+    dataEmissao: 13,
+    ramo: 15,
+    dataCancelamento: indiceDataCancelamento
+  };
+  // Importação do funil comercial precisa manter o histórico completo.
+  // O filtro de ano/mês é aplicado na tela do funil, não durante a importação.
   const novoResumo: ResumoOrcamentos = { ...resumoOrcamentosInicial };
   const linhasProcessadas: LinhaProcessada[] = [];
   const chavesInternas = new Set<string>();
+  let totalCanceladosProcessados = 0;
+  let totalCanceladosComData = 0;
+  let totalCanceladosComValorNaColunaSemConversao = 0;
 
   rows.slice(indiceCabecalho + 1).forEach((linha) => {
     if (linhaEstaVazia(linha)) {
@@ -207,14 +312,16 @@ function montarRegistrosProcessados(
     const dataFechamento = converterDataParaIso(
       obterValor(linha, indices.dataFechamento)
     );
+    const valorDataCancelamento = obterValor(
+      linha,
+      indices.dataCancelamento
+    );
+    const dataCancelamento = converterDataCancelamentoParaIso(
+      valorDataCancelamento
+    );
 
     if (!dataEmissao) {
       novoResumo.dataInvalida += 1;
-      return;
-    }
-
-    if (dataEmissao < dataLimite) {
-      novoResumo.foraHistoricoMeses += 1;
       return;
     }
 
@@ -229,6 +336,16 @@ function montarRegistrosProcessados(
 
     const status = statusRaw as StatusOrcamentoImportacao;
 
+    if (status === 'C') {
+      totalCanceladosProcessados += 1;
+
+      if (dataCancelamento) {
+        totalCanceladosComData += 1;
+      } else if (String(valorDataCancelamento ?? '').trim()) {
+        totalCanceladosComValorNaColunaSemConversao += 1;
+      }
+    }
+
     linhasProcessadas.push({
       ...clienteNormalizado,
       numero_it_completo: numeroItCompleto,
@@ -238,13 +355,32 @@ function montarRegistrosProcessados(
       quantidade_item: converterNumeroParaBanco(
         obterValor(linha, indices.quantidade)
       ),
+      valor_total: converterNumeroParaBanco(
+        obterValor(linha, indices.valorTotal)
+      ),
       status,
       status_descricao: obterStatusDescricao(status),
       data_emissao: dataEmissao,
       data_fechamento: dataFechamento,
+      data_cancelamento: dataCancelamento,
+      ramo: texto(obterValor(linha, indices.ramo)) || null,
       origem_importacao: `planilha_orcamentos_crm:${arquivoNome}`
     });
   });
+
+  if (totalCanceladosProcessados > 0 && totalCanceladosComData === 0) {
+    throw new Error(
+      [
+        'Importação interrompida para proteger o histórico.',
+        `Foram encontrados ${totalCanceladosProcessados} registros com status C,`,
+        'mas nenhuma data de cancelamento válida foi lida.',
+        `Coluna utilizada: ${indices.dataCancelamento + 1} (R = 18 na contagem visual).`,
+        `Valores existentes que não puderam ser convertidos: ${totalCanceladosComValorNaColunaSemConversao}.`,
+        'Confira se o arquivo selecionado é o relatório completo de orçamentos do ERP',
+        'e se a coluna Data Cancela está presente.'
+      ].join(' ')
+    );
+  }
 
   return {
     linhasProcessadas,
@@ -331,10 +467,13 @@ export async function importarHistoricoOrcamentos(params: {
     pedido_venda: registro.pedido_venda,
     descricao_item: registro.descricao_item,
     quantidade_item: registro.quantidade_item,
+    valor_total: registro.valor_total,
     status: registro.status,
     status_descricao: registro.status_descricao,
     data_emissao: registro.data_emissao,
     data_fechamento: registro.data_fechamento,
+    data_cancelamento: registro.data_cancelamento,
+    ramo: registro.ramo,
     origem_importacao: registro.origem_importacao,
     updated_at: new Date().toISOString()
   }));

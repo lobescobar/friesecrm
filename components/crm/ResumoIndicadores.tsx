@@ -40,22 +40,31 @@ export default function ResumoIndicadores({
   ];
 
   return (
-    <section className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <section
+      className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
+      aria-label="Resumo de clientes"
+    >
       {indicadores.map((indicador) => (
         <div
           key={indicador.label}
-          className="crm-card rounded-2xl p-4"
+          className="crm-card flex h-[58px] items-center justify-between gap-3 rounded-2xl px-4 py-2"
+          aria-label={`${indicador.label}: ${indicador.valor.toLocaleString(
+            'pt-BR'
+          )}. ${indicador.apoio}.`}
         >
-          <p className="crm-label">{indicador.label}</p>
-          <div className="mt-2 flex items-end justify-between gap-3">
-            <p className="text-3xl font-extrabold tracking-tight text-slate-950">
+          <div className="min-w-0">
+            <p className="crm-label truncate text-[10px] leading-3">
+              {indicador.label}
+            </p>
+            <p className="mt-1 text-2xl font-extrabold leading-6 tracking-tight text-slate-950">
               {indicador.valor.toLocaleString('pt-BR')}
             </p>
-            <span className="h-2 w-10 rounded-full bg-[#c58a2a]" />
           </div>
-          <p className="mt-2 text-xs font-medium text-slate-500">
-            {indicador.apoio}
-          </p>
+
+          <span
+            className="h-1.5 w-8 shrink-0 rounded-full bg-[#c58a2a]"
+            aria-hidden="true"
+          />
         </div>
       ))}
     </section>

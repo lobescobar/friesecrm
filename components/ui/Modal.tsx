@@ -275,7 +275,7 @@ export default function Modal({
         </div>
 
         {footer ? (
-          <footer className="border-t border-slate-100 bg-white px-6 py-4">
+          <footer className="border-t border-slate-100 bg-white px-6 py-3">
             {footer}
           </footer>
         ) : null}

@@ -14,6 +14,7 @@ import L from 'leaflet';
 import { GeoSearchControl, OpenStreetMapProvider } from 'leaflet-geosearch';
 import { Cliente } from '../../types';
 import { STATUS_COLORS, StatusType } from '../../utils/constants';
+import Button from '../ui/Button';
 
 type MapaClientesProps = {
   clientes: Cliente[];
@@ -192,13 +193,15 @@ export default function MapaClientes({
                   </div>
 
                   {onSelecionarCliente ? (
-                    <button
+                    <Button
                       type="button"
+                      variant="primary"
+                      size="sm"
                       onClick={() => onSelecionarCliente(cliente)}
-                      className="rounded bg-slate-900 px-3 py-1 text-xs font-bold text-white"
+                      className="rounded"
                     >
                       Abrir detalhes
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               </Popup>

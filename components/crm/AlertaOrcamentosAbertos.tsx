@@ -348,13 +348,14 @@ export default function AlertaOrcamentosAbertos({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <p className="font-bold text-blue-900">{textoQuantidade}</p>
+      <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 shadow-sm">
+        <div className="flex min-h-[58px] flex-col gap-2 py-2 md:h-[58px] md:flex-row md:items-center md:justify-between md:py-0">
+          <p className="text-sm font-bold text-blue-900">{textoQuantidade}</p>
 
           <Button
             type="button"
             onClick={() => setListaAberta((atual) => !atual)}
+            className="min-h-9 px-4 py-1.5 text-sm"
           >
             {listaAberta ? 'Ocultar abertos' : 'Visualizar abertos'}
           </Button>

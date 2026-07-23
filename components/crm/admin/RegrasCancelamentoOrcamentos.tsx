@@ -378,6 +378,8 @@ export default function RegrasCancelamentoOrcamentos({
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
+              size="sm"
+              className="h-[30px] min-h-[30px] px-[10px] py-0 text-sm leading-none"
               onClick={() => setCriando((atual) => !atual)}
               disabled={salvando}
               aria-expanded={criando}
@@ -439,6 +441,8 @@ export default function RegrasCancelamentoOrcamentos({
 
             <Button
               type="button"
+              size="sm"
+              className="h-[30px] min-h-[30px] px-[10px] py-0 text-sm leading-none"
               onClick={cadastrarEmail}
               disabled={salvando}
               loading={salvando}
@@ -495,6 +499,8 @@ export default function RegrasCancelamentoOrcamentos({
                         <Button
                           type="button"
                           variant="secondary"
+                          size="sm"
+                          className="h-[30px] min-h-[30px] px-[10px] py-0 text-sm leading-none"
                           aria-label={`Editar regras do e-mail ${email.email}`}
                           onClick={() => {
                             setEditando(email);

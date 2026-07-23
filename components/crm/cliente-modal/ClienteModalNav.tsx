@@ -4,7 +4,6 @@ export type ClienteModalSecao =
   | 'dados'
   | 'contatos'
   | 'historico'
-  | 'mapa'
   | 'observacoes';
 
 type ClienteModalNavProps = {
@@ -31,11 +30,6 @@ const secoes: Array<{
     id: 'historico',
     label: 'Histórico',
     descricao: 'orçamentos'
-  },
-  {
-    id: 'mapa',
-    label: 'Mapa',
-    descricao: 'localização'
   },
   {
     id: 'observacoes',

@@ -137,3 +137,68 @@ textarea:focus-visible {
 .crm-subtle-text {
   color: #53637a;
 }
+
+
+/* Etapa 4A — padrões visuais reutilizáveis do CRM */
+.crm-panel {
+  border: 1px solid var(--friese-line);
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 1.5rem;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+}
+
+.crm-panel-soft {
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 1rem;
+}
+
+.crm-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.crm-table th {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.crm-table td,
+.crm-table th {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.crm-message {
+  border-radius: 1rem;
+  border: 1px solid #e2e8f0;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+}
+
+.crm-message-info {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+.crm-message-success {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.crm-message-warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.crm-message-danger {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}

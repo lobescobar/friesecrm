@@ -3,6 +3,7 @@
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabase';
+import Button from '../../components/ui/Button';
 
 export default function ResetSenha() {
   const [novaSenha, setNovaSenha] = useState('');
@@ -79,13 +80,17 @@ export default function ResetSenha() {
             </div>
           ) : null}
 
-          <button
+          <Button
             type="submit"
-            disabled={carregando}
-            className="mt-2 w-full rounded-xl bg-slate-900 py-3 font-medium text-white transition hover:bg-slate-800 disabled:bg-slate-500"
+            variant="primary"
+            size="lg"
+            fullWidth
+            loading={carregando}
+            loadingText="Atualizando..."
+            className="mt-2"
           >
-            {carregando ? 'Atualizando...' : 'Salvar nova senha'}
-          </button>
+            Salvar nova senha
+          </Button>
         </form>
       </section>
     </main>

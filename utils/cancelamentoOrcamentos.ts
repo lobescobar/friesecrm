@@ -11,7 +11,12 @@ type RegraCancelamentoConsulta = {
   email_cancelamento_id: string | null;
 };
 
-function normalizarSegmentoCancelamento(segmento?: string | null) {
+export type ConteudoEmailCancelamento = {
+  assunto: string;
+  corpo: string;
+};
+
+export function normalizarSegmentoCancelamento(segmento?: string | null) {
   return (segmento || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -86,13 +91,12 @@ export async function buscarEmailCancelamentoConfigurado(
   }
 }
 
-export function montarUrlEmailCancelamento(params: {
+export function montarConteudoEmailCancelamento(params: {
   numeroOrcamento: string;
   solicitante: string;
   motivo: string;
-  destinatario: string;
   segmentoCliente?: string | null;
-}) {
+}): ConteudoEmailCancelamento {
   const assunto = `Solicitação de cancelamento do orçamento ${params.numeroOrcamento}`;
   const corpo = [
     'Favor cancelar o orçamento a seguir.',
@@ -102,8 +106,20 @@ export function montarUrlEmailCancelamento(params: {
     `Vendedor/Solicitante CRM: ${params.solicitante}`,
     `Motivo: ${params.motivo}`,
     '',
-    'Solicitação enviada pelo Painel comercial.'
+    'Solicitação enviada automaticamente pelo Painel comercial.'
   ].join('\n');
+
+  return { assunto, corpo };
+}
+
+export function montarUrlEmailCancelamento(params: {
+  numeroOrcamento: string;
+  solicitante: string;
+  motivo: string;
+  destinatario: string;
+  segmentoCliente?: string | null;
+}) {
+  const { assunto, corpo } = montarConteudoEmailCancelamento(params);
 
   return `mailto:${params.destinatario}?subject=${encodeURIComponent(
     assunto
