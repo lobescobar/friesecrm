@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { Cliente } from '../../../types';
 import { STATUS_OPTIONS } from '../../../utils/constants';
@@ -51,7 +51,7 @@ export default function ClienteResumo({
               Resumo do cliente
             </h4>
             <p className="mt-1 text-sm text-slate-500">
-              Visão rápida para consulta e direcionamento.
+              VisÃ£o rÃ¡pida para consulta e direcionamento.
             </p>
           </div>
 
@@ -86,7 +86,7 @@ export default function ClienteResumo({
             label="Telefone"
             value={formatarTelefone(cliente.telefone)}
           />
-          <InfoCard label="Endereço" value={enderecoCompleto} />
+          <InfoCard label="EndereÃ§o" value={enderecoCompleto} />
         </div>
       </div>
 
@@ -115,9 +115,13 @@ export default function ClienteResumo({
           onClick={() => onAbrirSecao('historico')}
           className="rounded-2xl border border-slate-300 bg-white py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
         >
-          Histórico do Cliente
+          HistÃ³rico do Cliente
         </button>
       </div>
     </section>
   );
 }
+
+
+
+

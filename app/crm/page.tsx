@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -15,21 +15,21 @@ import type { AreaCRM } from '../../types/crmNavegacao';
 import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
-import CrmHeader from '../../components/crm/CrmHeader';
-import ResumoIndicadores from '../../components/crm/ResumoIndicadores';
-import FiltrosClientes from '../../components/crm/FiltrosClientes';
-import TabelaClientes from '../../components/crm/TabelaClientes';
-import ClienteModal from '../../components/crm/ClienteModal';
-import GestaoUsuarios from '../../components/crm/GestaoUsuarios';
+import CrmHeader from '../../components/crm/layout/CrmHeader';
+import ResumoIndicadores from '../../components/crm/dashboard/ResumoIndicadores';
+import FiltrosClientes from '../../components/crm/clientes/FiltrosClientes';
+import TabelaClientes from '../../components/crm/clientes/TabelaClientes';
+import ClienteModal from '../../components/crm/cliente-modal/ClienteModal';
+import GestaoUsuarios from '../../components/crm/admin/GestaoUsuarios';
 import AuditoriaAdmin from '../../components/crm/admin/AuditoriaAdmin';
-import AlertaOrcamentosAbertos from '../../components/crm/AlertaOrcamentosAbertos';
-import FunilOrcamentos from '../../components/crm/FunilOrcamentos';
+import AlertaOrcamentosAbertos from '../../components/crm/orcamentos/AlertaOrcamentosAbertos';
+import FunilOrcamentos from '../../components/crm/orcamentos/FunilOrcamentos';
 import NavegacaoAreasCRM from '../../components/crm/pagina/NavegacaoAreasCRM';
 import { OrcamentoAbertoResumo } from '../../hooks/useOrcamentosAbertos';
 import type { ClienteModalSecao } from '../../components/crm/cliente-modal/ClienteModalNav';
 import { limparCachesCRM } from '../../utils/sessionCache';
 
-const MapaClientes = dynamic(() => import('../../components/crm/MapaClientes'), {
+const MapaClientes = dynamic(() => import('../../components/crm/mapa/MapaClientes'), {
   ssr: false,
   loading: () => (
     <div className="flex h-full w-full items-center justify-center bg-slate-100 text-slate-400">
@@ -301,7 +301,7 @@ function CRMContent() {
           </div>
         ) : erroBloqueanteClientes ? (
           <EmptyState
-            title="Não foi possível carregar os clientes"
+            title="NÃ£o foi possÃ­vel carregar os clientes"
             description={erroClientes || 'Erro ao carregar clientes.'}
             action={
               <Button type="button" onClick={carregarClientes}>
@@ -325,7 +325,7 @@ function CRMContent() {
                 className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
                 role="alert"
               >
-                Não foi possível atualizar os clientes agora. Os dados em tela foram mantidos.
+                NÃ£o foi possÃ­vel atualizar os clientes agora. Os dados em tela foram mantidos.
               </div>
             ) : null}
 
@@ -456,3 +456,17 @@ export default function MiniCRM() {
     </ErrorBoundary>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+

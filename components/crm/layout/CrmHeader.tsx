@@ -2,8 +2,8 @@
 
 import Image from 'next/image';
 import Button from '../../ui/Button';
-import ImportarERP from '../ImportarERP';
-import ImportarOrcamentos from '../ImportarOrcamentos';
+import ImportarERP from '../importar-erp/ImportarERP';
+import ImportarOrcamentos from '../importar-orcamentos/ImportarOrcamentos';
 
 type CrmHeaderProps = {
   isAdmin: boolean;
@@ -60,6 +60,8 @@ export default function CrmHeader({
     </header>
   );
 }
+
+
 
 
 

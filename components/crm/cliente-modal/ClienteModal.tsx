@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Cliente, Contato } from '../../../types';
 import Button from '../../ui/Button';
 import Modal from '../../ui/Modal';
-import ContatosCliente from '../ContatosCliente';
-import HistoricoCliente from '../HistoricoCliente';
+import ContatosCliente from '../clientes/ContatosCliente';
+import HistoricoCliente from '../historico/HistoricoCliente';
 import ClienteDados from './ClienteDados';
 import ClienteModalNav, {
   ClienteModalSecao
@@ -262,6 +262,8 @@ export default function ClienteModal({
     </Modal>
   );
 }
+
+
 
 
 
