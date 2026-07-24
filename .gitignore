@@ -42,3 +42,17 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+# Dependências
+node_modules/
+# Build / cache
+.vercel/
+dist/
+build/
+# Variáveis de ambiente / secrets
+.env.local
+.env.*.local
+.env.*.backup*
+!.env.*.example
+.next/
+.env
+estrutura.txt
