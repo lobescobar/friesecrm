@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { ChangeEvent, useMemo, useRef, useState } from 'react';
 import { registrarAuditoriaImportacao } from '../../../lib/auditoria';
@@ -92,7 +92,7 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
 
       const arquivoProcessado = await processarArquivoERP(arquivo);
 
-      setProgresso('Verificando clientes jÃ¡ cadastrados...');
+      setProgresso('Verificando clientes já cadastrados...');
 
       const codigosExistentes = await buscarCodigosExistentesERP(
         arquivoProcessado.clientes.map((cliente) => cliente.codigo_cliente)
@@ -116,10 +116,10 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
       setClientesParaImportar(arquivoProcessado.clientes);
       setResumo(novoResumo);
       setMensagem(
-        'Planilha lida com sucesso. Revise a prÃ©via e confirme para gravar no banco.'
+        'Planilha lida com sucesso. Revise a prévia e confirme para gravar no banco.'
       );
     } catch (error) {
-      console.error('Erro ao preparar importaÃ§Ã£o:', error);
+      console.error('Erro ao preparar importação:', error);
       setErro(
         error instanceof Error
           ? error.message
@@ -231,14 +231,14 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
       });
 
       setResultado(novoResultado);
-      setMensagem('ImportaÃ§Ã£o concluÃ­da com sucesso.');
+      setMensagem('Importação concluída com sucesso.');
       onSucesso?.();
     } catch (error) {
-      console.error('Erro na importaÃ§Ã£o:', error);
+      console.error('Erro na importação:', error);
       setErro(
         error instanceof Error
           ? error.message
-          : 'Erro inesperado durante a importaÃ§Ã£o.'
+          : 'Erro inesperado durante a importação.'
       );
     } finally {
       setProcessando(false);
@@ -249,13 +249,13 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
   return (
     <>
       <Button type="button" onClick={abrir} aria-label="Importar planilha ERP">
-        <span aria-hidden="true">ðŸ“¥</span>
+        <span aria-hidden="true">📥</span>
         Importar ERP
       </Button>
 
       {aberto ? (
         <Modal
-          title="ImportaÃ§Ã£o ERP"
+          title="Importação ERP"
           subtitle="Fluxo guiado para revisar a planilha antes de gravar no Supabase."
           onClose={fechar}
           bloquearFechamento={processando}
@@ -268,7 +268,7 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
               >
                 {processando
                   ? progresso || 'Processando...'
-                  : mensagem || erro || 'Selecione uma planilha para comeÃ§ar.'}
+                  : mensagem || erro || 'Selecione uma planilha para começar.'}
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -288,7 +288,7 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
                   loading={processando}
                   loadingText="Processando..."
                 >
-                  Confirmar importaÃ§Ã£o
+                  Confirmar importação
                 </Button>
 
                 <Button
@@ -310,7 +310,7 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
             className="hidden"
             onChange={prepararArquivo}
             disabled={processando}
-            aria-label="Selecionar arquivo de importaÃ§Ã£o ERP"
+            aria-label="Selecionar arquivo de importação ERP"
           />
 
           <div className="space-y-5">
@@ -342,20 +342,3 @@ export default function ImportarERP({ onSucesso }: ImportarERPProps) {
     </>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

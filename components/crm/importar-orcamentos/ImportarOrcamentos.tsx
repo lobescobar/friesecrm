@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { ChangeEvent, useRef, useState } from 'react';
 import {
@@ -85,15 +85,15 @@ export default function ImportarOrcamentos({
       setMensagem(
         processamento.registros.length > 0
           ? 'Planilha lida com sucesso. Revise o resumo antes de confirmar.'
-          : 'A planilha foi lida, mas nenhum orÃ§amento ficou vÃ¡lido para importaÃ§Ã£o.'
+          : 'A planilha foi lida, mas nenhum orçamento ficou válido para importação.'
       );
     } catch (error) {
       const mensagemErro =
         error instanceof Error
           ? error.message
-          : 'NÃ£o foi possÃ­vel ler a planilha de orÃ§amentos.';
+          : 'Não foi possível ler a planilha de orçamentos.';
 
-      console.error('Erro ao processar planilha de orÃ§amentos:', error);
+      console.error('Erro ao processar planilha de orçamentos:', error);
       setErro(mensagemErro);
       setRegistros([]);
       setPreview([]);
@@ -114,7 +114,7 @@ export default function ImportarOrcamentos({
 
   const confirmarImportacao = async () => {
     if (registros.length === 0) {
-      setErro('NÃ£o hÃ¡ registros vÃ¡lidos para importar.');
+      setErro('Não há registros válidos para importar.');
       return;
     }
 
@@ -124,7 +124,7 @@ export default function ImportarOrcamentos({
     setResultado(null);
 
     try {
-      setMensagem('HistÃ³rico importado. Recalculando status dos clientes...');
+      setMensagem('Histórico importado. Recalculando status dos clientes...');
 
       const novoResultado = await importarHistoricoOrcamentos({
         registros,
@@ -135,18 +135,18 @@ export default function ImportarOrcamentos({
       setResultado(novoResultado);
 
       setMensagem(
-        `HistÃ³rico de orÃ§amentos importado com sucesso. Status recalculado: ${novoResultado.clientesAtivos.toLocaleString(
+        `Histórico de orçamentos importado com sucesso. Status recalculado: ${novoResultado.clientesAtivos.toLocaleString(
           'pt-BR'
-        )} cliente(s) ativo(s) nos Ãºltimos ${MESES_STATUS_CLIENTE_ATIVO} meses.`
+        )} cliente(s) ativo(s) nos últimos ${MESES_STATUS_CLIENTE_ATIVO} meses.`
       );
       onSucesso?.();
     } catch (error) {
       const mensagemErro =
         error instanceof Error
           ? error.message
-          : 'NÃ£o foi possÃ­vel importar o histÃ³rico de orÃ§amentos.';
+          : 'Não foi possível importar o histórico de orçamentos.';
 
-      console.error('Erro ao importar histÃ³rico de orÃ§amentos:', error);
+      console.error('Erro ao importar histórico de orçamentos:', error);
       setErro(mensagemErro);
     } finally {
       setImportando(false);
@@ -163,13 +163,13 @@ export default function ImportarOrcamentos({
           setAberto(true);
         }}
       >
-        Importar OrÃ§amentos
+        Importar Orçamentos
       </Button>
 
       {aberto ? (
         <Modal
-          title="Importar OrÃ§amentos"
-          subtitle={`HistÃ³rico dos Ãºltimos ${MESES_HISTORICO_ORCAMENTOS} meses por cliente`}
+          title="Importar Orçamentos"
+          subtitle={`Histórico dos últimos ${MESES_HISTORICO_ORCAMENTOS} meses por cliente`}
           onClose={fecharModal}
           bloquearFechamento={processando || importando}
           footer={
@@ -199,7 +199,7 @@ export default function ImportarOrcamentos({
                   onClick={confirmarImportacao}
                   disabled={registros.length === 0 || processando || importando}
                 >
-                  {importando ? 'Importando...' : 'Confirmar importaÃ§Ã£o'}
+                  {importando ? 'Importando...' : 'Confirmar importação'}
                 </Button>
               </div>
             </div>
@@ -233,19 +233,3 @@ export default function ImportarOrcamentos({
     </>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
