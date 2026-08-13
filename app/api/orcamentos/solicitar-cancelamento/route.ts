@@ -89,7 +89,7 @@ async function registrarHistoricoCancelamento(
         '',
         `Motivo: ${params.motivo}`
       ].join('\n'),
-      proximo_passo: 'Acompanhar retorno da solicitação de cancelamento',
+      proximo_passo: null,
       data_retorno: null,
       criado_por: params.userId,
       criado_por_email: params.userEmail

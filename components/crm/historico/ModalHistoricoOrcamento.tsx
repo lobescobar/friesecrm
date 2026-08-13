@@ -27,6 +27,19 @@ type ModalHistoricoOrcamentoProps = {
   onSalvar: () => void;
 };
 
+const ACAO_AUTOMATICA_CANCELAMENTO =
+  'Acompanhar retorno da solicitação de cancelamento';
+
+function obterAcaoNecessariaVisivel(interacao: OrcamentoInteracao) {
+  const acao = interacao.proximo_passo?.trim() || '';
+
+  if (acao === ACAO_AUTOMATICA_CANCELAMENTO) {
+    return null;
+  }
+
+  return acao || null;
+}
+
 export default function ModalHistoricoOrcamento({
   clienteId,
   orcamento,
@@ -207,11 +220,15 @@ export default function ModalHistoricoOrcamento({
 
           {!carregando && interacoes.length > 0 ? (
             <div className="mt-4 space-y-3">
-              {interacoes.map((interacao) => (
-                <article
-                  key={interacao.id}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm"
-                >
+              {interacoes.map((interacao) => {
+                const acaoNecessaria =
+                  obterAcaoNecessariaVisivel(interacao);
+
+                return (
+                  <article
+                    key={interacao.id}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm"
+                  >
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <p className="font-bold text-slate-900">
@@ -230,29 +247,34 @@ export default function ModalHistoricoOrcamento({
                     {interacao.observacao}
                   </p>
 
-                  {interacao.proximo_passo || interacao.data_retorno ? (
+                  {acaoNecessaria || interacao.data_retorno ? (
                     <div className="mt-3 grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2">
-                      <div>
-                        <p className="text-xs font-bold uppercase text-slate-400">
-                          Ação necessária
-                        </p>
-                        <p className="font-medium text-slate-700">
-                          {interacao.proximo_passo || '-'}
-                        </p>
-                      </div>
+                      {acaoNecessaria ? (
+                        <div>
+                          <p className="text-xs font-bold uppercase text-slate-400">
+                            Ação necessária
+                          </p>
+                          <p className="font-medium text-slate-700">
+                            {acaoNecessaria}
+                          </p>
+                        </div>
+                      ) : null}
 
-                      <div>
-                        <p className="text-xs font-bold uppercase text-slate-400">
-                          Lembrete
-                        </p>
-                        <p className="font-medium text-slate-700">
-                          {formatarData(interacao.data_retorno)}
-                        </p>
-                      </div>
+                      {interacao.data_retorno ? (
+                        <div>
+                          <p className="text-xs font-bold uppercase text-slate-400">
+                            Lembrete
+                          </p>
+                          <p className="font-medium text-slate-700">
+                            {formatarData(interacao.data_retorno)}
+                          </p>
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           ) : null}
         </div>
