@@ -84,10 +84,6 @@ export function obterDescricaoStatusOrcamento(
     'status' | 'status_descricao' | 'cancelamento_solicitado'
   >
 ) {
-  if (orcamento.cancelamento_solicitado) {
-    return 'Cancelamento solicitado';
-  }
-
   return orcamento.status_descricao;
 }
 
