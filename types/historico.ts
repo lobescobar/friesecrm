@@ -36,6 +36,8 @@ export type OrcamentoInteracao = {
   observacao: string;
   proximo_passo: string | null;
   data_retorno: string | null;
+  lembrete_previo_enviado_em?: string | null;
+  lembrete_data_enviado_em?: string | null;
   criado_por: string | null;
   criado_por_email: string | null;
   created_at: string;

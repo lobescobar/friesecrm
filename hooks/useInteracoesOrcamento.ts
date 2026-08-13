@@ -93,6 +93,7 @@ export function useInteracoesOrcamento({
           observacao,
           proximo_passo: formulario.proximo_passo.trim() || null,
           data_retorno: formulario.data_retorno || null,
+          responsavel_email: usuarioEmail || null,
           criado_por: usuarioId || null,
           criado_por_email: usuarioEmail || null
         });
