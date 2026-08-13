@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { MESES_HISTORICO_ORCAMENTOS } from '../utils/constants';
-import { CACHE_TTL_CURTO_MS, lerCacheSessao, salvarCacheSessao } from '../utils/sessionCache';
+import {
+  CACHE_TTL_CURTO_MS,
+  lerCacheSessao,
+  salvarCacheSessao
+} from '../utils/sessionCache';
 
 export type OrcamentoAbertoResumo = {
   chave: string;
@@ -53,9 +57,15 @@ const estadoInicial: EstadoOrcamentosAbertos = {
 
 const TAMANHO_PAGINA_SUPABASE = 1000;
 
-// Nova chave para não reaproveitar cache antigo calculado com a regra anterior.
+// Chave atualizada para não reutilizar cache antigo calculado com regra anterior.
+// Regra atual:
+// 1. Agrupar por codigo_cliente_loja + numero_orcamento.
+// 2. Status final vem do status atual importado:
+//    A = Aberto
+//    B = Fechado
+//    C = Cancelado
 const CHAVE_CACHE_ORCAMENTOS_ABERTOS =
-  'orcamentos-abertos:v5-18-meses-status-principal';
+  'orcamentos-abertos:v7-status-atual-upload';
 
 function calcularDataLimiteHistoricoOrcamentos() {
   const data = new Date();
@@ -109,22 +119,21 @@ function obterCodigoCliente(linha: LinhaOrcamentoHistorico) {
 }
 
 function escolherStatusFinal(
-  statusAtual: StatusOrcamento,
+  _statusAtual: StatusOrcamento,
   novoStatus: StatusOrcamento
 ) {
-  // Regra do relatório ERP:
-  // A = Aberto, B = Fechado, C = Cancelado.
-  // Ao agrupar pelo número principal do orçamento, qualquer status final diferente de A
-  // não pode entrar na lista de abertos.
-  const prioridade: Record<StatusOrcamento, number> = {
-    B: 3,
-    C: 2,
-    A: 1
-  };
-
-  return prioridade[novoStatus] > prioridade[statusAtual]
-    ? novoStatus
-    : statusAtual;
+  // Regra oficial definida:
+  // A = Aberto
+  // B = Fechado
+  // C = Cancelado
+  //
+  // A cada upload da planilha, o CRM deve considerar o status atual
+  // importado para o orçamento agrupado por:
+  // codigo_cliente_loja + numero_orcamento.
+  //
+  // Portanto, não existe mais prioridade B > C > A.
+  // O status final passa a ser o status atual recebido/importado.
+  return novoStatus;
 }
 
 function removerCamposInternos(
@@ -245,6 +254,29 @@ async function buscarTodasLinhasOrcamentosHistorico(dataLimite: string) {
   return linhas;
 }
 
+async function carregarOrcamentosAbertos() {
+  const dataLimite = calcularDataLimiteHistoricoOrcamentos();
+  const linhas = await buscarTodasLinhasOrcamentosHistorico(dataLimite);
+  return agruparEFiltrarOrcamentosAbertos(linhas);
+}
+
+function obterMensagemErro(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof error.message === 'string'
+  ) {
+    return error.message;
+  }
+
+  return 'Não foi possível carregar os orçamentos em aberto.';
+}
+
 export function useOrcamentosAbertos(refreshKey = 0) {
   const [estado, setEstado] = useState<EstadoOrcamentosAbertos>(estadoInicial);
   const orcamentosRef = useRef<OrcamentoAbertoResumo[]>([]);
@@ -253,89 +285,119 @@ export function useOrcamentosAbertos(refreshKey = 0) {
     orcamentosRef.current = estado.orcamentos;
   }, [estado.orcamentos]);
 
-  useEffect(() => {
-    const cache = lerCacheSessao<OrcamentoAbertoResumo[]>(
-      CHAVE_CACHE_ORCAMENTOS_ABERTOS,
-      CACHE_TTL_CURTO_MS
-    );
-
-    if (cache?.length && orcamentosRef.current.length === 0) {
-      orcamentosRef.current = cache;
-      setEstado({
-        orcamentos: cache,
-        loading: false,
-        error: null
-      });
-    }
-  }, []);
-
-  const carregarOrcamentosAbertos = useCallback(async () => {
-    const cache = lerCacheSessao<OrcamentoAbertoResumo[]>(
-      CHAVE_CACHE_ORCAMENTOS_ABERTOS,
-      CACHE_TTL_CURTO_MS
-    );
-
-    if (cache?.length && orcamentosRef.current.length === 0) {
-      orcamentosRef.current = cache;
-      setEstado({
-        orcamentos: cache,
-        loading: false,
-        error: null
-      });
-    }
-
-    const possuiDadosEmTela =
-      orcamentosRef.current.length > 0 || Boolean(cache?.length);
-
+  const recarregar = useCallback(async () => {
     setEstado((estadoAtual) => ({
       ...estadoAtual,
-      loading: !possuiDadosEmTela,
+      loading: true,
       error: null
     }));
 
     try {
-      const dataLimite = calcularDataLimiteHistoricoOrcamentos();
-      const linhas = await buscarTodasLinhasOrcamentosHistorico(dataLimite);
-      const orcamentosAgrupados = agruparEFiltrarOrcamentosAbertos(linhas);
+      const orcamentos = await carregarOrcamentosAbertos();
 
-      orcamentosRef.current = orcamentosAgrupados;
-      salvarCacheSessao(CHAVE_CACHE_ORCAMENTOS_ABERTOS, orcamentosAgrupados);
+      salvarCacheSessao(
+        CHAVE_CACHE_ORCAMENTOS_ABERTOS,
+        orcamentos
+      );
+
+      orcamentosRef.current = orcamentos;
 
       setEstado({
-        orcamentos: orcamentosAgrupados,
+        orcamentos,
         loading: false,
         error: null
       });
-    } catch (err) {
-      const mensagem =
-        err instanceof Error
-          ? err.message
-          : 'Não foi possível carregar os orçamentos em aberto.';
 
-      console.error('Erro ao carregar orçamentos em aberto:', err);
+      return orcamentos;
+    } catch (error) {
+      const mensagem = obterMensagemErro(error);
 
       setEstado((estadoAtual) => ({
-        orcamentos: estadoAtual.orcamentos,
+        ...estadoAtual,
         loading: false,
         error: mensagem
       }));
+
+      return orcamentosRef.current;
     }
   }, []);
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      void carregarOrcamentosAbertos();
-    }, 0);
+    const cache = lerCacheSessao<OrcamentoAbertoResumo[]>(
+      CHAVE_CACHE_ORCAMENTOS_ABERTOS,
+      CACHE_TTL_CURTO_MS
+    );
+
+    if (cache) {
+      orcamentosRef.current = cache;
+
+      setEstado({
+        orcamentos: cache,
+        loading: false,
+        error: null
+      });
+
+      return;
+    }
+
+    let cancelado = false;
+
+    async function carregar() {
+      setEstado((estadoAtual) => ({
+        ...estadoAtual,
+        loading: true,
+        error: null
+      }));
+
+      try {
+        const orcamentos = await carregarOrcamentosAbertos();
+
+        if (cancelado) {
+          return;
+        }
+
+        salvarCacheSessao(
+          CHAVE_CACHE_ORCAMENTOS_ABERTOS,
+          orcamentos
+        );
+
+        orcamentosRef.current = orcamentos;
+
+        setEstado({
+          orcamentos,
+          loading: false,
+          error: null
+        });
+      } catch (error) {
+        if (cancelado) {
+          return;
+        }
+
+        setEstado((estadoAtual) => ({
+          ...estadoAtual,
+          loading: false,
+          error: obterMensagemErro(error)
+        }));
+      }
+    }
+
+    carregar();
 
     return () => {
-      window.clearTimeout(timeoutId);
+      cancelado = true;
     };
-  }, [carregarOrcamentosAbertos, refreshKey]);
+  }, [refreshKey]);
+
+  const obterOrcamentosAtuais = useCallback(() => {
+    return orcamentosRef.current;
+  }, []);
 
   return {
-    orcamentos: estado.orcamentos,
-    loading: estado.loading,
-    error: estado.error,
-    carregarOrcamentosAbertos
+    ...estado,
+    total: estado.orcamentos.length,
+    totalAbertos: estado.orcamentos.length,
+    quantidade: estado.orcamentos.length,
+    recarregar,
+    obterOrcamentosAtuais
   };
 }
