@@ -51,7 +51,7 @@ export default function ClienteResumo({
               Resumo do cliente
             </h4>
             <p className="mt-1 text-sm text-slate-500">
-              VisÃ£o rÃ¡pida para consulta e direcionamento.
+              Visão rápida para consulta e direcionamento.
             </p>
           </div>
 
@@ -86,7 +86,7 @@ export default function ClienteResumo({
             label="Telefone"
             value={formatarTelefone(cliente.telefone)}
           />
-          <InfoCard label="EndereÃ§o" value={enderecoCompleto} />
+          <InfoCard label="Endereço" value={enderecoCompleto} />
         </div>
       </div>
 
@@ -115,7 +115,7 @@ export default function ClienteResumo({
           onClick={() => onAbrirSecao('historico')}
           className="rounded-2xl border border-slate-300 bg-white py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
         >
-          HistÃ³rico do Cliente
+          Histórico do Cliente
         </button>
       </div>
     </section>

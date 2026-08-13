@@ -1,5 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import {
+  buscarOrigemImportacaoOrcamentosAtual,
+  montarSufixoCacheOrigemImportacao
+} from '../lib/origemImportacaoOrcamentos';
 import { MESES_HISTORICO_ORCAMENTOS } from '../utils/constants';
 import { HistoricoOrcamento } from '../types';
 import {
@@ -20,17 +24,71 @@ type EstadoHistoricoCliente = {
   error: string | null;
 };
 
+type InteracaoCancelamentoConsulta = {
+  numero_orcamento: string;
+  observacao: string | null;
+  created_at: string | null;
+};
+
 const estadoInicial: EstadoHistoricoCliente = {
   historico: [],
   loading: false,
   error: null
 };
 
+function montarChaveCacheHistoricoCliente(
+  clienteId: string,
+  origemImportacao: string | null
+) {
+  return `historico-cliente:v3:${montarSufixoCacheOrigemImportacao(
+    origemImportacao
+  )}:${clienteId}`;
+}
+
+function extrairMotivoCancelamento(observacao?: string | null) {
+  const texto = observacao?.trim() || '';
+  const marcador = 'Motivo:';
+  const indice = texto.indexOf(marcador);
+
+  if (indice === -1) {
+    return texto || null;
+  }
+
+  return texto.slice(indice + marcador.length).trim() || null;
+}
+
+async function buscarCancelamentosSolicitados(
+  clienteId: string,
+  numerosOrcamento: string[]
+) {
+  if (numerosOrcamento.length === 0) {
+    return new Map<string, InteracaoCancelamentoConsulta>();
+  }
+
+  const { data, error } = await supabase
+    .from('orcamentos_interacoes')
+    .select('numero_orcamento, observacao, created_at')
+    .eq('cliente_id', clienteId)
+    .eq('status_comercial', 'cancelamento_solicitado')
+    .in('numero_orcamento', numerosOrcamento)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  const mapa = new Map<string, InteracaoCancelamentoConsulta>();
+
+  ((data || []) as InteracaoCancelamentoConsulta[]).forEach((interacao) => {
+    if (!mapa.has(interacao.numero_orcamento)) {
+      mapa.set(interacao.numero_orcamento, interacao);
+    }
+  });
+
+  return mapa;
+}
+
 export function useHistoricoCliente(clienteId?: string | null, ativo = true) {
-  const cacheKey = useMemo(
-    () => (clienteId ? `historico-cliente:${clienteId}` : null),
-    [clienteId]
-  );
   const [estado, setEstado] = useState<EstadoHistoricoCliente>(estadoInicial);
   const historicoRef = useRef<HistoricoOrcamento[]>([]);
 
@@ -38,12 +96,28 @@ export function useHistoricoCliente(clienteId?: string | null, ativo = true) {
     historicoRef.current = estado.historico;
   }, [estado.historico]);
 
-  useEffect(() => {
-    if (!cacheKey || historicoRef.current.length > 0) {
-      return undefined;
+  const carregarHistorico = useCallback(async () => {
+    if (!clienteId || !ativo) {
+      if (!clienteId) {
+        setEstado(estadoInicial);
+      }
+
+      return;
     }
 
-    const timeoutId = window.setTimeout(() => {
+    setEstado((estadoAtual) => ({
+      ...estadoAtual,
+      loading: historicoRef.current.length === 0,
+      error: null
+    }));
+
+    try {
+      const dataLimite = calcularDataLimiteHistoricoOrcamentos();
+      const origemImportacao = await buscarOrigemImportacaoOrcamentosAtual();
+      const cacheKey = montarChaveCacheHistoricoCliente(
+        clienteId,
+        origemImportacao
+      );
       const historicoEmCache = lerCacheSessao<HistoricoOrcamento[]>(
         cacheKey,
         CACHE_TTL_CURTO_MS
@@ -57,51 +131,27 @@ export function useHistoricoCliente(clienteId?: string | null, ativo = true) {
           error: null
         });
       }
-    }, 0);
 
-    return () => window.clearTimeout(timeoutId);
-  }, [cacheKey]);
+      const possuiDadosEmTela =
+        historicoRef.current.length > 0 || Boolean(historicoEmCache);
 
-  const carregarHistorico = useCallback(async () => {
-    if (!clienteId || !ativo || !cacheKey) {
-      if (!clienteId) {
-        setEstado(estadoInicial);
-      }
-
-      return;
-    }
-
-    const historicoEmCache = lerCacheSessao<HistoricoOrcamento[]>(
-      cacheKey,
-      CACHE_TTL_CURTO_MS
-    );
-
-    if (historicoEmCache && historicoRef.current.length === 0) {
-      historicoRef.current = historicoEmCache;
-      setEstado({
-        historico: historicoEmCache,
-        loading: false,
+      setEstado((estadoAtual) => ({
+        ...estadoAtual,
+        loading: !possuiDadosEmTela,
         error: null
-      });
-    }
+      }));
 
-    const possuiDadosEmTela =
-      historicoRef.current.length > 0 || Boolean(historicoEmCache);
-
-    setEstado((estadoAtual) => ({
-      ...estadoAtual,
-      loading: !possuiDadosEmTela,
-      error: null
-    }));
-
-    try {
-      const dataLimite = calcularDataLimiteHistoricoOrcamentos();
-
-      const { data, error: erroBusca } = await supabase
+      let query = supabase
         .from('orcamentos_historico')
         .select('*')
         .eq('cliente_id', clienteId)
-        .gte('data_emissao', dataLimite)
+        .gte('data_emissao', dataLimite);
+
+      if (origemImportacao) {
+        query = query.eq('origem_importacao', origemImportacao);
+      }
+
+      const { data, error: erroBusca } = await query
         .order('data_emissao', { ascending: false })
         .order('numero_it_completo', { ascending: true });
 
@@ -109,7 +159,30 @@ export function useHistoricoCliente(clienteId?: string | null, ativo = true) {
         throw erroBusca;
       }
 
-      const historicoAtualizado = (data || []) as HistoricoOrcamento[];
+      const historicoBanco = (data || []) as HistoricoOrcamento[];
+      const numerosOrcamento = Array.from(
+        new Set(historicoBanco.map((item) => item.numero_orcamento))
+      );
+      const cancelamentosSolicitados =
+        await buscarCancelamentosSolicitados(clienteId, numerosOrcamento);
+      const historicoAtualizado = historicoBanco.map((item) => {
+        const cancelamento = cancelamentosSolicitados.get(
+          item.numero_orcamento
+        );
+
+        if (!cancelamento) {
+          return item;
+        }
+
+        return {
+          ...item,
+          cancelamento_solicitado: true,
+          motivo_cancelamento: extrairMotivoCancelamento(
+            cancelamento.observacao
+          ),
+          cancelamento_solicitado_em: cancelamento.created_at
+        };
+      });
 
       historicoRef.current = historicoAtualizado;
       salvarCacheSessao(cacheKey, historicoAtualizado);
@@ -133,7 +206,7 @@ export function useHistoricoCliente(clienteId?: string | null, ativo = true) {
         error: mensagem
       }));
     }
-  }, [clienteId, ativo, cacheKey]);
+  }, [clienteId, ativo]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {

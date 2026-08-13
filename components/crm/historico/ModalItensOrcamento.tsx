@@ -4,7 +4,8 @@ import type { HistoricoOrcamentoAgrupado } from '../../../types/historico';
 import {
   formatarData,
   formatarQuantidade,
-  obterClasseStatus,
+  obterClasseStatusOrcamento,
+  obterDescricaoStatusOrcamento,
   ordenarItensOrcamento
 } from '../../../utils/historicoOrcamentos';
 
@@ -31,7 +32,7 @@ export default function ModalItensOrcamento({
       scrollKey={`orcamento:${clienteId}:${orcamento.numero_orcamento}`}
       footer={
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-          {orcamento.status === 'A' ? (
+          {orcamento.status === 'A' && !orcamento.cancelamento_solicitado ? (
             <Button
               type="button"
               variant="danger"
@@ -84,14 +85,25 @@ export default function ModalItensOrcamento({
               Status
             </p>
             <span
-              className={`mt-1 inline-flex rounded-full border px-2 py-1 text-xs font-bold ${obterClasseStatus(
-                orcamento.status
+              className={`mt-1 inline-flex rounded-full border px-2 py-1 text-xs font-bold ${obterClasseStatusOrcamento(
+                orcamento
               )}`}
             >
-              {orcamento.status_descricao}
+              {obterDescricaoStatusOrcamento(orcamento)}
             </span>
           </div>
         </div>
+
+        {orcamento.cancelamento_solicitado ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <p className="font-bold">Cancelamento solicitado</p>
+            {orcamento.motivo_cancelamento ? (
+              <p className="mt-1 whitespace-pre-wrap">
+                Motivo: {orcamento.motivo_cancelamento}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="hidden overflow-hidden rounded-2xl border border-slate-200 md:block">
           <table className="min-w-full divide-y divide-slate-200 text-sm">

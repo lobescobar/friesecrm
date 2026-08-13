@@ -17,6 +17,13 @@ type CorpoSolicitacao = {
   chaveIdempotencia?: string;
 };
 
+type SolicitacaoCancelamentoExistente = {
+  id: string;
+  status_envio: string | null;
+  destinatarios: string[] | null;
+  motivo: string | null;
+};
+
 function criarSupabaseAutenticado(token: string) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -40,6 +47,59 @@ function criarSupabaseAutenticado(token: string) {
 
 function validarEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+async function registrarHistoricoCancelamento(
+  supabase: ReturnType<typeof criarSupabaseAutenticado>,
+  params: {
+    clienteId: string;
+    numeroOrcamento: string;
+    pedidoVenda?: string | null;
+    userId: string;
+    userEmail: string;
+    motivo: string;
+  }
+) {
+  const { data: interacoesExistentes, error: erroConsulta } = await supabase
+    .from('orcamentos_interacoes')
+    .select('id')
+    .eq('cliente_id', params.clienteId)
+    .eq('numero_orcamento', params.numeroOrcamento)
+    .eq('status_comercial', 'cancelamento_solicitado')
+    .limit(1);
+
+  if (erroConsulta) {
+    throw erroConsulta;
+  }
+
+  if ((interacoesExistentes || []).length > 0) {
+    return false;
+  }
+
+  const { error: erroHistorico } = await supabase
+    .from('orcamentos_interacoes')
+    .insert({
+      cliente_id: params.clienteId,
+      numero_orcamento: params.numeroOrcamento,
+      pedido_venda: params.pedidoVenda || null,
+      status_comercial: 'cancelamento_solicitado',
+      responsavel_email: params.userEmail,
+      observacao: [
+        'Solicitação de cancelamento enviada.',
+        '',
+        `Motivo: ${params.motivo}`
+      ].join('\n'),
+      proximo_passo: 'Acompanhar retorno da solicitação de cancelamento',
+      data_retorno: null,
+      criado_por: params.userId,
+      criado_por_email: params.userEmail
+    });
+
+  if (erroHistorico) {
+    throw erroHistorico;
+  }
+
+  return true;
 }
 
 export async function POST(request: NextRequest) {
@@ -94,7 +154,7 @@ export async function POST(request: NextRequest) {
 
     const { data: linhasOrcamento, error: erroOrcamento } = await supabase
       .from('orcamentos_historico')
-      .select('id, status, cliente_id, numero_orcamento')
+      .select('id, status, cliente_id, numero_orcamento, pedido_venda')
       .eq('cliente_id', clienteId)
       .eq('numero_orcamento', numeroOrcamento)
       .limit(1);
@@ -117,6 +177,41 @@ export async function POST(request: NextRequest) {
         { error: 'Somente orçamentos abertos podem ter cancelamento solicitado.' },
         { status: 409 }
       );
+    }
+
+    const { data: solicitacoesEnviadas, error: erroSolicitacaoEnviada } =
+      await supabase
+        .from('solicitacoes_cancelamento_orcamentos')
+        .select('id, status_envio, destinatarios, motivo')
+        .eq('cliente_id', clienteId)
+        .eq('numero_orcamento', numeroOrcamento)
+        .eq('status_envio', 'enviado')
+        .order('enviado_em', { ascending: false })
+        .limit(1);
+
+    if (erroSolicitacaoEnviada) {
+      throw erroSolicitacaoEnviada;
+    }
+
+    const solicitacaoJaEnviada = (
+      (solicitacoesEnviadas || []) as SolicitacaoCancelamentoExistente[]
+    )[0];
+
+    if (solicitacaoJaEnviada) {
+      await registrarHistoricoCancelamento(supabase, {
+        clienteId,
+        numeroOrcamento,
+        pedidoVenda: orcamento.pedido_venda || null,
+        userId: user.id,
+        userEmail: user.email,
+        motivo: solicitacaoJaEnviada.motivo || motivo
+      });
+
+      return NextResponse.json({
+        ok: true,
+        duplicado: true,
+        destinatarios: solicitacaoJaEnviada.destinatarios || []
+      });
     }
 
     const segmentoNormalizado =
@@ -177,15 +272,24 @@ export async function POST(request: NextRequest) {
 
     const { data: solicitacaoExistente } = await supabase
       .from('solicitacoes_cancelamento_orcamentos')
-      .select('id, status_envio, destinatarios')
+      .select('id, status_envio, destinatarios, motivo')
       .eq('chave_idempotencia', chaveIdempotencia)
-      .maybeSingle();
+      .maybeSingle<SolicitacaoCancelamentoExistente>();
 
     if (solicitacaoExistente?.status_envio === 'enviado') {
+      await registrarHistoricoCancelamento(supabase, {
+        clienteId,
+        numeroOrcamento,
+        pedidoVenda: orcamento.pedido_venda || null,
+        userId: user.id,
+        userEmail: user.email,
+        motivo: solicitacaoExistente.motivo || motivo
+      });
+
       return NextResponse.json({
         ok: true,
         duplicado: true,
-        destinatarios: solicitacaoExistente.destinatarios
+        destinatarios: solicitacaoExistente.destinatarios || []
       });
     }
 
@@ -237,6 +341,15 @@ export async function POST(request: NextRequest) {
     if (erroAtualizacao) {
       console.error('E-mail enviado, mas auditoria não foi atualizada.', erroAtualizacao);
     }
+
+    await registrarHistoricoCancelamento(supabase, {
+      clienteId,
+      numeroOrcamento,
+      pedidoVenda: orcamento.pedido_venda || null,
+      userId: user.id,
+      userEmail: user.email,
+      motivo
+    });
 
     return NextResponse.json({
       ok: true,

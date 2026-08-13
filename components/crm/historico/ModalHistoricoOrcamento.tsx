@@ -9,7 +9,8 @@ import type {
 import {
   formatarData,
   formatarDataHora,
-  obterClasseStatus
+  obterClasseStatusOrcamento,
+  obterDescricaoStatusOrcamento
 } from '../../../utils/historicoOrcamentos';
 
 type ModalHistoricoOrcamentoProps = {
@@ -93,14 +94,25 @@ export default function ModalHistoricoOrcamento({
               Status ERP
             </p>
             <span
-              className={`mt-1 inline-flex rounded-full border px-2 py-1 text-xs font-bold ${obterClasseStatus(
-                orcamento.status
+              className={`mt-1 inline-flex rounded-full border px-2 py-1 text-xs font-bold ${obterClasseStatusOrcamento(
+                orcamento
               )}`}
             >
-              {orcamento.status_descricao}
+              {obterDescricaoStatusOrcamento(orcamento)}
             </span>
           </div>
         </div>
+
+        {orcamento.cancelamento_solicitado ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <p className="font-bold">Cancelamento solicitado</p>
+            {orcamento.motivo_cancelamento ? (
+              <p className="mt-1 whitespace-pre-wrap">
+                Motivo: {orcamento.motivo_cancelamento}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         {mensagem ? (
           <div

@@ -69,6 +69,9 @@ export interface HistoricoOrcamento {
 
   status: StatusOrcamentoCodigo;
   status_descricao: string;
+  cancelamento_solicitado?: boolean;
+  motivo_cancelamento?: string | null;
+  cancelamento_solicitado_em?: string | null;
 
   data_emissao: string;
 

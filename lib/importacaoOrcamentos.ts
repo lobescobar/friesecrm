@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { registrarAuditoriaImportacao } from './auditoria';
+import { montarOrigemImportacaoOrcamentos } from './origemImportacaoOrcamentos';
 import { supabase } from './supabase';
 import {
   MESES_STATUS_CLIENTE_ATIVO
@@ -117,17 +118,26 @@ function calcularDataLimiteStatusCliente() {
   return data.toISOString().slice(0, 10);
 }
 
-async function buscarClientesComOrcamentoRecente(dataLimite: string) {
+async function buscarClientesComOrcamentoRecente(
+  dataLimite: string,
+  origemImportacao: string | null
+) {
   const clientesAtivos = new Set<string>();
   const tamanhoPagina = 1000;
   let inicio = 0;
 
   while (true) {
-    const { data, error } = await supabase
+    let query = supabase
       .from('orcamentos_historico')
       .select('cliente_id')
       .not('cliente_id', 'is', null)
-      .gte('data_emissao', dataLimite)
+      .gte('data_emissao', dataLimite);
+
+    if (origemImportacao) {
+      query = query.eq('origem_importacao', origemImportacao);
+    }
+
+    const { data, error } = await query
       .range(inicio, inicio + tamanhoPagina - 1);
 
     if (error) {
@@ -170,9 +180,14 @@ async function atualizarStatusClientesEmLotes(
   }
 }
 
-async function recalcularStatusClientesPorHistorico() {
+async function recalcularStatusClientesPorHistorico(
+  origemImportacao: string | null
+) {
   const dataLimite = calcularDataLimiteStatusCliente();
-  const clientesAtivos = await buscarClientesComOrcamentoRecente(dataLimite);
+  const clientesAtivos = await buscarClientesComOrcamentoRecente(
+    dataLimite,
+    origemImportacao
+  );
 
   const { error: erroInativos } = await supabase
     .from('clientes')
@@ -457,6 +472,12 @@ export async function importarHistoricoOrcamentos(params: {
   arquivoNome: string;
   resumo: ResumoOrcamentos;
 }) {
+  const dataImportacao = new Date().toISOString();
+  const origemImportacao = montarOrigemImportacaoOrcamentos(
+    params.arquivoNome,
+    dataImportacao
+  );
+
   const registrosParaGravar = params.registros.map((registro) => ({
     cliente_id: registro.cliente_id,
     codigo_cliente: registro.codigo_cliente,
@@ -474,8 +495,8 @@ export async function importarHistoricoOrcamentos(params: {
     data_fechamento: registro.data_fechamento,
     data_cancelamento: registro.data_cancelamento,
     ramo: registro.ramo,
-    origem_importacao: registro.origem_importacao,
-    updated_at: new Date().toISOString()
+    origem_importacao: origemImportacao,
+    updated_at: dataImportacao
   }));
 
   const pacotes = lotes(registrosParaGravar, 500);
@@ -492,12 +513,15 @@ export async function importarHistoricoOrcamentos(params: {
     }
   }
 
-  const resultadoStatus = await recalcularStatusClientesPorHistorico();
+  const resultadoStatus = await recalcularStatusClientesPorHistorico(
+    origemImportacao
+  );
 
   const novoResultado = {
     enviados: registrosParaGravar.length,
     lotes: pacotes.length,
-    clientesAtivos: resultadoStatus.clientesAtivos
+    clientesAtivos: resultadoStatus.clientesAtivos,
+    origemImportacao
   };
 
   await registrarAuditoriaImportacao({

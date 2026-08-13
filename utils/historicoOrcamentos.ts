@@ -62,10 +62,33 @@ export function obterClasseStatus(status: HistoricoOrcamento['status']) {
   return 'border-red-200 bg-red-50 text-red-700';
 }
 
+export function obterClasseStatusOrcamento(
+  orcamento: Pick<HistoricoOrcamentoAgrupado, 'status' | 'cancelamento_solicitado'>
+) {
+  if (orcamento.cancelamento_solicitado) {
+    return 'border-red-200 bg-red-50 text-red-700';
+  }
+
+  return obterClasseStatus(orcamento.status);
+}
+
 export function obterDescricaoStatus(status: HistoricoOrcamento['status']) {
   if (status === 'A') return 'Aberto';
   if (status === 'B') return 'Fechado';
   return 'Cancelado';
+}
+
+export function obterDescricaoStatusOrcamento(
+  orcamento: Pick<
+    HistoricoOrcamentoAgrupado,
+    'status' | 'status_descricao' | 'cancelamento_solicitado'
+  >
+) {
+  if (orcamento.cancelamento_solicitado) {
+    return 'Cancelamento solicitado';
+  }
+
+  return orcamento.status_descricao;
 }
 
 function escolherStatus(
@@ -131,6 +154,9 @@ export function agruparPorNumeroPrincipal(
         pedido_venda: item.pedido_venda || null,
         status: item.status,
         status_descricao: obterDescricaoStatus(item.status),
+        cancelamento_solicitado: Boolean(item.cancelamento_solicitado),
+        motivo_cancelamento: item.motivo_cancelamento || null,
+        cancelamento_solicitado_em: item.cancelamento_solicitado_em || null,
         quantidade_itens: 1,
         itens: [item]
       });
@@ -156,6 +182,15 @@ export function agruparPorNumeroPrincipal(
       ),
       status: statusEscolhido,
       status_descricao: obterDescricaoStatus(statusEscolhido),
+      cancelamento_solicitado:
+        existente.cancelamento_solicitado ||
+        Boolean(item.cancelamento_solicitado),
+      motivo_cancelamento:
+        existente.motivo_cancelamento || item.motivo_cancelamento || null,
+      cancelamento_solicitado_em:
+        existente.cancelamento_solicitado_em ||
+        item.cancelamento_solicitado_em ||
+        null,
       quantidade_itens: itens.length,
       itens
     });

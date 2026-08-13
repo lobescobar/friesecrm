@@ -58,11 +58,12 @@ export default function ModalCancelamentoOrcamento({
       <div className="space-y-4">
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <p className="font-semibold">
-            Esta ação não altera o status do orçamento no CRM nem no ERP.
+            Esta ação não altera o status do orçamento no ERP.
           </p>
           <p className="mt-1">
             Ela envia automaticamente um e-mail de solicitação para o vendedor
-            e para o destino administrativo {emailCancelamento}.
+            e para o destino administrativo {emailCancelamento}. No CRM, o
+            orçamento ficará marcado como cancelamento solicitado.
           </p>
         </div>
 

@@ -150,12 +150,12 @@ export default function ClienteModal({
         observacoes
       });
 
-      setMensagem('AlteraÃ§Ãµes salvas com sucesso.');
+      setMensagem('Alterações salvas com sucesso.');
     } catch (error) {
       const erro =
         error instanceof Error
           ? error.message
-          : 'NÃ£o foi possÃ­vel salvar as alteraÃ§Ãµes.';
+          : 'Não foi possível salvar as alterações.';
       setMensagem(erro);
     } finally {
       setSalvando(false);
@@ -220,7 +220,7 @@ export default function ClienteModal({
             {mensagem
               ? mensagem
               : alterado
-                ? 'Existem alteraÃ§Ãµes nÃ£o salvas.'
+                ? 'Existem alterações não salvas.'
                 : 'Dados atualizados.'}
           </div>
 
@@ -242,7 +242,7 @@ export default function ClienteModal({
               loading={salvando}
               loadingText="Salvando..."
             >
-              Salvar alteraÃ§Ãµes
+              Salvar alterações
             </Button>
           </div>
         </div>

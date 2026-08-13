@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import {
+  buscarOrigemImportacaoOrcamentosAtual,
+  montarSufixoCacheOrigemImportacao
+} from '../lib/origemImportacaoOrcamentos';
+import {
   CACHE_TTL_CURTO_MS,
   lerCacheSessao,
   salvarCacheSessao
@@ -166,19 +170,28 @@ function montarPeriodoDescricao() {
   return 'Volume financeiro';
 }
 
-function montarChaveCache(isAdmin: boolean, filtros: FiltrosFunilOrcamentos) {
+function montarChaveCache(
+  isAdmin: boolean,
+  filtros: FiltrosFunilOrcamentos,
+  origemImportacao: string | null
+) {
   const alcance = isAdmin ? 'admin-todos' : `vendedor-${calcularAnoCorrente()}`;
   const area = filtros.area || FILTRO_TODAS_AREAS;
   const periodo = filtros.periodo || FILTRO_TODOS_PERIODOS;
   const mes = filtros.mes || FILTRO_TODOS_MESES;
+  const origem = montarSufixoCacheOrigemImportacao(origemImportacao);
 
-  return `funil-orcamentos:v18-status-principal-${alcance}:area-${area}:periodo-${periodo}:mes-${mes}`;
+  return `funil-orcamentos:v19-lote-atual-${origem}:${alcance}:area-${area}:periodo-${periodo}:mes-${mes}`;
 }
 
-function montarChaveCacheOpcoes(isAdmin: boolean) {
+function montarChaveCacheOpcoes(
+  isAdmin: boolean,
+  origemImportacao: string | null
+) {
   const alcance = isAdmin ? 'admin-todos' : `vendedor-${calcularAnoCorrente()}`;
+  const origem = montarSufixoCacheOrigemImportacao(origemImportacao);
 
-  return `funil-orcamentos:opcoes:v2-${alcance}`;
+  return `funil-orcamentos:opcoes:v3-lote-atual-${origem}:${alcance}`;
 }
 
 function extrairPartesData(data?: string | null) {
@@ -366,18 +379,27 @@ type LinhaOpcoesFunil = {
   data_cancelamento?: string | null;
 };
 
-async function buscarOpcoesFunilOrcamentos(isAdmin: boolean) {
+async function buscarOpcoesFunilOrcamentos(
+  isAdmin: boolean,
+  origemImportacao: string | null
+) {
   const linhas: LinhaOpcoesFunil[] = [];
 
   for (const status of STATUS_ORDEM) {
     const campoData = DATA_REFERENCIA_STATUS[status];
 
-    const linhasStatus = await buscarTodasAsPaginas<LinhaOpcoesFunil>(() =>
-      supabase
+    const linhasStatus = await buscarTodasAsPaginas<LinhaOpcoesFunil>(() => {
+      let query = supabase
         .from('orcamentos_historico')
         .select(`id, status, ramo, ${campoData}`)
-        .eq('status', status)
-    );
+        .eq('status', status);
+
+      if (origemImportacao) {
+        query = query.eq('origem_importacao', origemImportacao);
+      }
+
+      return query;
+    });
 
     linhas.push(...linhasStatus);
   }
@@ -411,7 +433,8 @@ async function buscarOpcoesFunilOrcamentos(isAdmin: boolean) {
 
 async function buscarLinhasPorStatus(
   status: StatusFunilOrcamento,
-  filtros: FiltrosFunilOrcamentos
+  filtros: FiltrosFunilOrcamentos,
+  origemImportacao: string | null
 ) {
   const campoData = DATA_REFERENCIA_STATUS[status] as string;
   const intervalo = montarIntervaloData(filtros);
@@ -429,6 +452,10 @@ async function buscarLinhasPorStatus(
         query = query.eq('ramo', filtros.area);
       }
 
+      if (origemImportacao) {
+        query = query.eq('origem_importacao', origemImportacao);
+      }
+
       if (intervalo) {
         if (exigirData) {
           query = query.not(campo, 'is', null);
@@ -443,7 +470,10 @@ async function buscarLinhasPorStatus(
   return buscarPorCampoData(campoData);
 }
 
-async function buscarLinhasTotalOrcado(filtros: FiltrosFunilOrcamentos) {
+async function buscarLinhasTotalOrcado(
+  filtros: FiltrosFunilOrcamentos,
+  origemImportacao: string | null
+) {
   const intervalo = montarIntervaloData(filtros);
 
   return buscarTodasAsPaginas<LinhaFunilBase>(() => {
@@ -456,6 +486,10 @@ async function buscarLinhasTotalOrcado(filtros: FiltrosFunilOrcamentos) {
 
     if (filtros.area !== FILTRO_TODAS_AREAS) {
       query = query.eq('ramo', filtros.area);
+    }
+
+    if (origemImportacao) {
+      query = query.eq('origem_importacao', origemImportacao);
     }
 
     if (intervalo) {
@@ -598,8 +632,6 @@ export function useFunilOrcamentos(isAdmin: boolean, refreshKey = 0) {
   );
 
 
-  const cacheKey = useMemo(() => montarChaveCache(isAdmin, filtros), [isAdmin, filtros]);
-  const cacheOpcoesKey = useMemo(() => montarChaveCacheOpcoes(isAdmin), [isAdmin]);
   const periodoDescricao = useMemo(() => montarPeriodoDescricao(), []);
   const resumoInicial = useMemo(
     () => ({
@@ -627,82 +659,76 @@ export function useFunilOrcamentos(isAdmin: boolean, refreshKey = 0) {
     opcoesRef.current = estado.opcoes;
   }, [estado.opcoes]);
 
-  useEffect(() => {
-    const cache = lerCacheSessao<CacheFunilOrcamentos>(
-      cacheKey,
-      CACHE_TTL_CURTO_MS
-    );
-
-    if (cache && resumoRef.current.totalOrcamentos === 0) {
-      resumoRef.current = cache.resumo;
-      setEstado({
-        resumo: cache.resumo,
-        opcoes: cache.opcoes,
-        loading: false,
-        error: null
-      });
-    }
-  }, [cacheKey]);
-
   const carregarFunilOrcamentos = useCallback(async () => {
     const numeroRequisicao = numeroRequisicaoRef.current + 1;
     numeroRequisicaoRef.current = numeroRequisicao;
 
-    const cache = lerCacheSessao<CacheFunilOrcamentos>(
-      cacheKey,
-      CACHE_TTL_CURTO_MS
-    );
-    const opcoesEmCache = lerCacheSessao<OpcoesFunilOrcamentos>(
-      cacheOpcoesKey,
-      CACHE_TTL_OPCOES_MS
-    );
-
-    if (cache && resumoRef.current.totalOrcamentos === 0) {
-      resumoRef.current = cache.resumo;
-      opcoesRef.current = cache.opcoes;
-
-      setEstado({
-        resumo: cache.resumo,
-        opcoes: cache.opcoes,
-        loading: false,
-        error: null
-      });
-    } else if (
-      opcoesEmCache &&
-      opcoesRef.current.areas.length === 0
-    ) {
-      opcoesRef.current = opcoesEmCache;
-
-      setEstado((estadoAtual) => ({
-        ...estadoAtual,
-        opcoes: opcoesEmCache
-      }));
-    }
-
-    const possuiDadosEmTela =
-      resumoRef.current.totalOrcamentos > 0 ||
-      Boolean(cache?.resumo.totalOrcamentos);
-
     setEstado((estadoAtual) => ({
       ...estadoAtual,
-      loading: !possuiDadosEmTela,
+      loading: resumoRef.current.totalOrcamentos === 0,
       error: null
     }));
 
     try {
+      const origemImportacao = await buscarOrigemImportacaoOrcamentosAtual();
+      const cacheKey = montarChaveCache(isAdmin, filtros, origemImportacao);
+      const cacheOpcoesKey = montarChaveCacheOpcoes(
+        isAdmin,
+        origemImportacao
+      );
+      const cache = lerCacheSessao<CacheFunilOrcamentos>(
+        cacheKey,
+        CACHE_TTL_CURTO_MS
+      );
+      const opcoesEmCache = lerCacheSessao<OpcoesFunilOrcamentos>(
+        cacheOpcoesKey,
+        CACHE_TTL_OPCOES_MS
+      );
+
+      if (cache && resumoRef.current.totalOrcamentos === 0) {
+        resumoRef.current = cache.resumo;
+        opcoesRef.current = cache.opcoes;
+
+        setEstado({
+          resumo: cache.resumo,
+          opcoes: cache.opcoes,
+          loading: false,
+          error: null
+        });
+      } else if (
+        opcoesEmCache &&
+        opcoesRef.current.areas.length === 0
+      ) {
+        opcoesRef.current = opcoesEmCache;
+
+        setEstado((estadoAtual) => ({
+          ...estadoAtual,
+          opcoes: opcoesEmCache
+        }));
+      }
+
+      const possuiDadosEmTela =
+        resumoRef.current.totalOrcamentos > 0 ||
+        Boolean(cache?.resumo.totalOrcamentos);
+
+      setEstado((estadoAtual) => ({
+        ...estadoAtual,
+        loading: !possuiDadosEmTela,
+        error: null
+      }));
+
       const promessaOpcoes =
-        opcoesEmCache ||
-        opcoesRef.current.areas.length > 0
-          ? Promise.resolve(opcoesEmCache || opcoesRef.current)
-          : buscarOpcoesFunilOrcamentos(isAdmin);
+        opcoesEmCache
+          ? Promise.resolve(opcoesEmCache)
+          : buscarOpcoesFunilOrcamentos(isAdmin, origemImportacao);
 
       const [opcoes, abertos, fechados, cancelados, totalAnalisado] =
         await Promise.all([
           promessaOpcoes,
-          buscarLinhasPorStatus('A', filtros),
-          buscarLinhasPorStatus('B', filtros),
-          buscarLinhasPorStatus('C', filtros),
-          buscarLinhasTotalOrcado(filtros)
+          buscarLinhasPorStatus('A', filtros, origemImportacao),
+          buscarLinhasPorStatus('B', filtros, origemImportacao),
+          buscarLinhasPorStatus('C', filtros, origemImportacao),
+          buscarLinhasTotalOrcado(filtros, origemImportacao)
         ]);
 
       if (numeroRequisicao !== numeroRequisicaoRef.current) {
@@ -750,8 +776,6 @@ export function useFunilOrcamentos(isAdmin: boolean, refreshKey = 0) {
       }));
     }
   }, [
-    cacheKey,
-    cacheOpcoesKey,
     filtros,
     isAdmin,
     periodoDescricao

@@ -61,7 +61,7 @@ function ListaCheckbox({
           className="mt-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-500"
           role="status"
         >
-          Nenhuma opÃ§Ã£o disponÃ­vel no banco.
+          Nenhuma opção disponível no banco.
         </p>
       </div>
     );
@@ -137,7 +137,7 @@ export default function GestaoUsuarios({
       .order('email', { ascending: true });
 
     if (error) {
-      setMensagem(`Erro ao carregar usuÃ¡rios: ${error.message}`);
+      setMensagem(`Erro ao carregar usuários: ${error.message}`);
       setUsuarios([]);
     } else {
       setUsuarios((data || []) as Profile[]);
@@ -159,7 +159,7 @@ export default function GestaoUsuarios({
 
     if (editando.role === 'admin') {
       const confirmou = window.confirm(
-        'VocÃª estÃ¡ concedendo acesso de administrador. Deseja continuar?'
+        'Você está concedendo acesso de administrador. Deseja continuar?'
       );
 
       if (!confirmou) return;
@@ -179,12 +179,12 @@ export default function GestaoUsuarios({
       .eq('id', editando.id);
 
     if (error) {
-      setMensagem(`Erro ao atualizar usuÃ¡rio: ${error.message}`);
+      setMensagem(`Erro ao atualizar usuário: ${error.message}`);
       setSalvando(false);
       return;
     }
 
-    setMensagem('UsuÃ¡rio atualizado com sucesso.');
+    setMensagem('Usuário atualizado com sucesso.');
     setEditando(null);
     setSalvando(false);
     carregarUsuarios();
@@ -193,10 +193,10 @@ export default function GestaoUsuarios({
   async function excluirUsuario(usuario: Profile) {
     const confirmou = window.confirm(
       [
-        `Excluir o usuÃ¡rio ${usuario.email}?`,
+        `Excluir o usuário ${usuario.email}?`,
         '',
-        'Esta aÃ§Ã£o remove o acesso ao CRM e apaga o cadastro de autenticaÃ§Ã£o do usuÃ¡rio.',
-        'Ela nÃ£o remove clientes, orÃ§amentos nem histÃ³ricos jÃ¡ importados.',
+        'Esta ação remove o acesso ao CRM e apaga o cadastro de autenticação do usuário.',
+        'Ela não remove clientes, orçamentos nem históricos já importados.',
         '',
         'Deseja continuar?'
       ].join('\n')
@@ -209,12 +209,12 @@ export default function GestaoUsuarios({
     } = await supabase.auth.getSession();
 
     if (!session?.access_token) {
-      setMensagem('SessÃ£o expirada. FaÃ§a login novamente.');
+      setMensagem('Sessão expirada. Faça login novamente.');
       return;
     }
 
     setSalvando(true);
-    setMensagem('Excluindo usuÃ¡rio...');
+    setMensagem('Excluindo usuário...');
 
     const resposta = await fetch('/api/admin/delete-user', {
       method: 'POST',
@@ -233,12 +233,12 @@ export default function GestaoUsuarios({
     };
 
     if (!resposta.ok) {
-      setMensagem(resultado.error || 'NÃ£o foi possÃ­vel excluir o usuÃ¡rio.');
+      setMensagem(resultado.error || 'Não foi possível excluir o usuário.');
       setSalvando(false);
       return;
     }
 
-    setMensagem(resultado.message || 'UsuÃ¡rio excluÃ­do com sucesso.');
+    setMensagem(resultado.message || 'Usuário excluído com sucesso.');
     setEditando(null);
     setSalvando(false);
     carregarUsuarios();
@@ -246,13 +246,13 @@ export default function GestaoUsuarios({
 
   async function criarUsuario() {
     if (!novoUsuario.email.trim() || !novoUsuario.password.trim()) {
-      setMensagem('Informe e-mail e senha provisÃ³ria.');
+      setMensagem('Informe e-mail e senha provisória.');
       return;
     }
 
     if (novoUsuario.role === 'admin') {
       const confirmou = window.confirm(
-        'VocÃª estÃ¡ criando um usuÃ¡rio administrador. Deseja continuar?'
+        'Você está criando um usuário administrador. Deseja continuar?'
       );
 
       if (!confirmou) return;
@@ -263,12 +263,12 @@ export default function GestaoUsuarios({
     } = await supabase.auth.getSession();
 
     if (!session?.access_token) {
-      setMensagem('SessÃ£o expirada. FaÃ§a login novamente.');
+      setMensagem('Sessão expirada. Faça login novamente.');
       return;
     }
 
     setSalvando(true);
-    setMensagem('Criando usuÃ¡rio...');
+    setMensagem('Criando usuário...');
 
     const resposta = await fetch('/api/admin/create-user', {
       method: 'POST',
@@ -290,12 +290,12 @@ export default function GestaoUsuarios({
     const resultado = (await resposta.json()) as { error?: string; message?: string };
 
     if (!resposta.ok) {
-      setMensagem(resultado.error || 'NÃ£o foi possÃ­vel criar o usuÃ¡rio.');
+      setMensagem(resultado.error || 'Não foi possível criar o usuário.');
       setSalvando(false);
       return;
     }
 
-    setMensagem(resultado.message || 'UsuÃ¡rio criado com sucesso.');
+    setMensagem(resultado.message || 'Usuário criado com sucesso.');
     setNovoUsuario(novoUsuarioInicial);
     setCriando(false);
     setSalvando(false);
@@ -309,7 +309,7 @@ export default function GestaoUsuarios({
         role="status"
         aria-live="polite"
       >
-        Carregando usuÃ¡rios...
+        Carregando usuários...
       </div>
     );
   }
@@ -325,7 +325,7 @@ export default function GestaoUsuarios({
         <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-6 py-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 id="gestao-usuarios-titulo" className="text-lg font-bold">
-              GestÃ£o de UsuÃ¡rios e AlÃ§adas
+              Gestão de Usuários e Alçadas
             </h2>
             <p className="text-sm text-slate-500">
               Controle quem acessa segmentos e estados do CRM.
@@ -341,14 +341,14 @@ export default function GestaoUsuarios({
             aria-expanded={criando}
             aria-controls="formulario-criacao-usuario"
           >
-            {criando ? 'Cancelar criaÃ§Ã£o' : 'Criar usuÃ¡rio'}
+            {criando ? 'Cancelar criação' : 'Criar usuário'}
           </Button>
         </div>
 
         {mensagem ? (
           <div
             className="mx-6 mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600"
-            role={mensagem.toLowerCase().includes('erro') || mensagem.toLowerCase().includes('nÃ£o foi possÃ­vel') ? 'alert' : 'status'}
+            role={mensagem.toLowerCase().includes('erro') || mensagem.toLowerCase().includes('não foi possível') ? 'alert' : 'status'}
             aria-live="polite"
           >
             {mensagem}
@@ -369,7 +369,7 @@ export default function GestaoUsuarios({
                   type="email"
                   value={novoUsuario.email}
                   autoComplete="email"
-                  aria-label="E-mail do novo usuÃ¡rio" 
+                  aria-label="E-mail do novo usuário"
                   onChange={(event) =>
                     setNovoUsuario({ ...novoUsuario, email: event.target.value })
                   }
@@ -379,13 +379,13 @@ export default function GestaoUsuarios({
 
               <label className="block">
                 <span className="text-[10px] font-bold uppercase text-slate-400">
-                  Senha provisÃ³ria
+                  Senha provisória
                 </span>
                 <input
                   type="password"
                   value={novoUsuario.password}
                   autoComplete="new-password"
-                  aria-label="Senha provisÃ³ria do novo usuÃ¡rio" 
+                  aria-label="Senha provisória do novo usuário"
                   onChange={(event) =>
                     setNovoUsuario({ ...novoUsuario, password: event.target.value })
                   }
@@ -399,7 +399,7 @@ export default function GestaoUsuarios({
                 </span>
                 <select
                   value={novoUsuario.role}
-                  aria-label="Perfil do novo usuÃ¡rio"
+                  aria-label="Perfil do novo usuário"
                   onChange={(event) =>
                     setNovoUsuario({
                       ...novoUsuario,
@@ -420,9 +420,9 @@ export default function GestaoUsuarios({
                 onClick={criarUsuario}
                 disabled={salvando}
                 loading={salvando}
-                loadingText="Criando usuÃ¡rio..."
+                loadingText="Criando usuário..."
               >
-                Criar usuÃ¡rio
+                Criar usuário
               </Button>
             </div>
 
@@ -459,7 +459,7 @@ export default function GestaoUsuarios({
                 className="rounded-2xl border border-purple-200 bg-purple-50 p-4 text-sm text-purple-700"
                 role="status"
               >
-                Administradores tÃªm acesso total a todos os clientes e alÃ§adas.
+                Administradores têm acesso total a todos os clientes e alçadas.
               </div>
             )}
           </div>
@@ -468,14 +468,14 @@ export default function GestaoUsuarios({
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <caption className="sr-only">
-              UsuÃ¡rios cadastrados no CRM, perfil de acesso, alÃ§adas e aÃ§Ãµes de ediÃ§Ã£o.
+              Usuários cadastrados no CRM, perfil de acesso, alçadas e ações de edição.
             </caption>
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
                 <th scope="col" className="px-6 py-3 text-left font-semibold">E-mail</th>
                 <th scope="col" className="px-6 py-3 text-left font-semibold">Cargo</th>
-                <th scope="col" className="px-6 py-3 text-left font-semibold">AlÃ§adas</th>
-                <th scope="col" className="px-6 py-3 text-right font-semibold">AÃ§Ãµes</th>
+                <th scope="col" className="px-6 py-3 text-left font-semibold">Alçadas</th>
+                <th scope="col" className="px-6 py-3 text-right font-semibold">Ações</th>
               </tr>
             </thead>
 
@@ -519,7 +519,7 @@ export default function GestaoUsuarios({
                       variant="secondary"
                       size="sm"
                       className="h-[30px] min-h-[30px] px-[10px] py-0 text-sm leading-none"
-                      aria-label={`Editar usuÃ¡rio ${usuario.email}`}
+                      aria-label={`Editar usuário ${usuario.email}`}
                       onClick={() => {
                         setEditando(usuario);
                         setMensagem(null);
@@ -538,7 +538,7 @@ export default function GestaoUsuarios({
       {editando ? (
         <Modal
           title={`Editar ${editando.email}`}
-          subtitle="AlÃ§adas e perfil de acesso."
+          subtitle="Alçadas e perfil de acesso."
           onClose={() => setEditando(null)}
           scrollKey={`gestao-usuario:${editando.id}`}
           footer={
@@ -551,7 +551,7 @@ export default function GestaoUsuarios({
                 loading={salvando}
                 loadingText="Excluindo..."
               >
-                Excluir usuÃ¡rio
+                Excluir usuário
               </Button>
 
               <Button
@@ -570,7 +570,7 @@ export default function GestaoUsuarios({
                 loading={salvando}
                 loadingText="Salvando..."
               >
-                Salvar alteraÃ§Ãµes
+                Salvar alterações
               </Button>
             </div>
           }
@@ -629,7 +629,7 @@ export default function GestaoUsuarios({
                 className="rounded-2xl border border-purple-200 bg-purple-50 p-4 text-sm text-purple-700"
                 role="status"
               >
-                Administradores tÃªm acesso total.
+                Administradores têm acesso total.
               </div>
             )}
           </div>

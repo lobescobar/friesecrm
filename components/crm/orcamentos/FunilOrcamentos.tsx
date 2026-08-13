@@ -62,7 +62,7 @@ function FunilStatusCard({ item }: { item: FunilOrcamentoResumoStatus }) {
       className={`h-[58px] rounded-2xl border ${visual.borda} ${visual.fundo} px-4 py-2`}
       aria-label={`${item.titulo}: ${formatarMoeda(
         item.valorTotal
-      )}, ${formatarNumero(item.quantidadeOrcamentos)} orÃ§amento(s), ${item.percentual}% do volume financeiro`}
+      )}, ${formatarNumero(item.quantidadeOrcamentos)} orçamento(s), ${item.percentual}% do volume financeiro`}
     >
       <div className="flex h-full items-center justify-between gap-3">
         <div className="min-w-0">
@@ -70,7 +70,7 @@ function FunilStatusCard({ item }: { item: FunilOrcamentoResumoStatus }) {
             {item.titulo}
           </h3>
           <p className="truncate text-[11px] font-medium text-slate-500">
-            {formatarNumero(item.quantidadeOrcamentos)} orÃ§amento(s)
+            {formatarNumero(item.quantidadeOrcamentos)} orçamento(s)
           </p>
         </div>
 
@@ -96,7 +96,7 @@ function FunilBarra({ item }: { item: FunilOrcamentoResumoStatus }) {
       <div className="flex items-center justify-between gap-3 text-xs font-bold text-slate-700">
         <span>{item.titulo}</span>
         <span>
-          {formatarMoeda(item.valorTotal)} Â· {formatarNumero(item.quantidadeOrcamentos)} orÃ§amento(s) Â· {item.percentual}%
+          {formatarMoeda(item.valorTotal)} · {formatarNumero(item.quantidadeOrcamentos)} orçamento(s) · {item.percentual}%
         </span>
       </div>
       <div className="h-3 overflow-hidden rounded-full bg-slate-100">
@@ -155,13 +155,13 @@ export default function FunilOrcamentos({
         <div className="grid gap-2 sm:grid-cols-[170px_130px_140px_auto] sm:items-end">
           <label className="block">
             <span className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-slate-500">
-              Ãrea
+              Área
             </span>
             <select
               className="h-[30px] w-full rounded-lg border border-slate-300 bg-white px-[10px] py-0 text-sm font-semibold text-slate-900 shadow-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
               value={filtros.area}
               onChange={(event) => setFiltroArea(event.target.value)}
-              aria-label="Filtrar funil por Ã¡rea, coluna P ramo"
+              aria-label="Filtrar funil por área, coluna P ramo"
             >
               <option value={FILTROS_FUNIL_ORCAMENTOS.TODAS_AREAS}>
                 Todas
@@ -176,13 +176,13 @@ export default function FunilOrcamentos({
 
           <label className="block">
             <span className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-slate-500">
-              PerÃ­odo
+              Período
             </span>
             <select
               className="h-[30px] w-full rounded-lg border border-slate-300 bg-white px-[10px] py-0 text-sm font-semibold text-slate-900 shadow-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
               value={filtros.periodo}
               onChange={(event) => setFiltroPeriodo(event.target.value)}
-              aria-label="Filtrar funil por ano do perÃ­odo"
+              aria-label="Filtrar funil por ano do período"
             >
               {isAdmin ? (
                 <option value={FILTROS_FUNIL_ORCAMENTOS.TODOS_PERIODOS}>
@@ -199,13 +199,13 @@ export default function FunilOrcamentos({
 
           <label className="block">
             <span className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-slate-500">
-              MÃªs
+              Mês
             </span>
             <select
               className="h-[30px] w-full rounded-lg border border-slate-300 bg-white px-[10px] py-0 text-sm font-semibold text-slate-900 shadow-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
               value={filtros.mes}
               onChange={(event) => setFiltroMes(event.target.value)}
-              aria-label="Refinar funil por mÃªs"
+              aria-label="Refinar funil por mês"
             >
               <option value={FILTROS_FUNIL_ORCAMENTOS.TODOS_MESES}>
                 Todos
@@ -236,7 +236,7 @@ export default function FunilOrcamentos({
           className="mb-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700"
           role="alert"
         >
-          NÃ£o foi possÃ­vel atualizar o funil agora. Detalhe: {error}
+          Não foi possível atualizar o funil agora. Detalhe: {error}
         </div>
       ) : null}
 
@@ -262,7 +262,7 @@ export default function FunilOrcamentos({
                 Total analisado
               </h3>
               <p className="truncate text-[11px] font-medium text-slate-500">
-                {formatarNumero(resumo.totalOrcamentos)} orÃ§amento(s)
+                {formatarNumero(resumo.totalOrcamentos)} orçamento(s)
               </p>
             </div>
             <p className="shrink-0 text-base font-extrabold leading-none text-slate-900">
@@ -274,7 +274,7 @@ export default function FunilOrcamentos({
 
       {resumo.totalOrcamentos === 0 && !error ? (
         <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800">
-          Nenhum orÃ§amento encontrado para os filtros atuais.
+          Nenhum orçamento encontrado para os filtros atuais.
         </p>
       ) : null}
     </section>

@@ -28,9 +28,9 @@ export default function ResumoIndicadores({
       apoio: 'Resultado da busca atual'
     },
     {
-      label: 'Com localizaÃ§Ã£o',
+      label: 'Com localização',
       valor: comCoordenadas,
-      apoio: 'DisponÃ­veis no mapa'
+      apoio: 'Disponíveis no mapa'
     },
     {
       label: 'Ativos',

@@ -301,7 +301,7 @@ function CRMContent() {
           </div>
         ) : erroBloqueanteClientes ? (
           <EmptyState
-            title="NÃ£o foi possÃ­vel carregar os clientes"
+            title="Não foi possível carregar os clientes"
             description={erroClientes || 'Erro ao carregar clientes.'}
             action={
               <Button type="button" onClick={carregarClientes}>
@@ -325,7 +325,7 @@ function CRMContent() {
                 className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
                 role="alert"
               >
-                NÃ£o foi possÃ­vel atualizar os clientes agora. Os dados em tela foram mantidos.
+                Não foi possível atualizar os clientes agora. Os dados em tela foram mantidos.
               </div>
             ) : null}
 

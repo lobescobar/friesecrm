@@ -44,7 +44,10 @@ export default function HistoricoCliente({
   orcamentoFocoInicial = null,
   onOrcamentoDetalheChange
 }: HistoricoClienteProps) {
-  const { historico, loading, error } = useHistoricoCliente(clienteId, aberto);
+  const { historico, loading, error, carregarHistorico } = useHistoricoCliente(
+    clienteId,
+    aberto
+  );
   const { user, profile } = useAuth();
 
   const usuarioEmail = profile?.email || user?.email || null;
@@ -297,7 +300,7 @@ export default function HistoricoCliente({
       } = await supabase.auth.getSession();
 
       if (erroSessao || !session?.access_token) {
-        throw new Error('Sua sessÃ£o expirou. Entre novamente no CRM.');
+        throw new Error('Sua sessão expirou. Entre novamente no CRM.');
       }
 
       const resposta = await fetch(
@@ -326,19 +329,20 @@ export default function HistoricoCliente({
 
       if (!resposta.ok || !resultado.ok) {
         throw new Error(
-          resultado.error || 'NÃ£o foi possÃ­vel enviar a solicitaÃ§Ã£o.'
+          resultado.error || 'Não foi possível enviar a solicitação.'
         );
       }
 
       setMensagemCancelamento(
-        `SolicitaÃ§Ã£o de cancelamento do orÃ§amento ${orcamentoCancelamento.numero_orcamento} enviada automaticamente para ${resultado.destinatarios?.join(', ') || emailCancelamento}.`
+        `Solicitação de cancelamento do orçamento ${orcamentoCancelamento.numero_orcamento} enviada automaticamente para ${resultado.destinatarios?.join(', ') || emailCancelamento}.`
       );
       fecharSolicitacaoCancelamento();
+      await carregarHistorico();
     } catch (erro) {
       setErroCancelamento(
         erro instanceof Error
           ? erro.message
-          : 'Erro inesperado ao enviar a solicitaÃ§Ã£o.'
+          : 'Erro inesperado ao enviar a solicitação.'
       );
     } finally {
       setEnviandoCancelamento(false);
@@ -354,15 +358,15 @@ export default function HistoricoCliente({
       <div className="mb-4 flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h4 className="text-sm font-bold uppercase tracking-widest text-slate-500">
-            HistÃ³rico do Cliente
+            Histórico do Cliente
           </h4>
           <p className="mt-1 text-sm text-slate-500">
-            OrÃ§amentos dos Ãºltimos {MESES_HISTORICO_ORCAMENTOS} meses agrupados
-            pelo nÃºmero principal.
+            Orçamentos dos últimos {MESES_HISTORICO_ORCAMENTOS} meses agrupados
+            pelo número principal.
           </p>
           {orcamentoFocoInicial ? (
             <p className="mt-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800">
-              OrÃ§amento selecionado pelo alerta: {orcamentoFocoInicial}
+              Orçamento selecionado pelo alerta: {orcamentoFocoInicial}
             </p>
           ) : null}
         </div>
@@ -379,7 +383,7 @@ export default function HistoricoCliente({
 
       {loading ? (
         <div className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-          <LoadingSpinner label="Carregando histÃ³rico do cliente..." />
+          <LoadingSpinner label="Carregando histórico do cliente..." />
         </div>
       ) : null}
 
@@ -388,7 +392,7 @@ export default function HistoricoCliente({
           role="alert"
           className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
         >
-          <strong>Erro ao carregar histÃ³rico.</strong>
+          <strong>Erro ao carregar histórico.</strong>
           <p className="mt-1">{error}</p>
         </div>
       ) : null}
@@ -398,7 +402,7 @@ export default function HistoricoCliente({
           role="status"
           className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600"
         >
-          Ainda nÃ£o hÃ¡ orÃ§amentos importados para este cliente nos Ãºltimos{' '}
+          Ainda não há orçamentos importados para este cliente nos últimos{' '}
           {MESES_HISTORICO_ORCAMENTOS} meses.
         </div>
       ) : null}
@@ -427,7 +431,7 @@ export default function HistoricoCliente({
               role="status"
               className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600"
             >
-              Nenhum orÃ§amento encontrado com o filtro selecionado.
+              Nenhum orçamento encontrado com o filtro selecionado.
             </div>
           ) : null}
 
@@ -447,9 +451,9 @@ export default function HistoricoCliente({
 
       {!loading && !error && historicoAgrupado.length > 0 ? (
         <p className="mt-4 text-xs text-slate-400">
-          OrdenaÃ§Ã£o atual: {rotulosOrdenacao[colunaOrdenacao]} /{' '}
+          Ordenação atual: {rotulosOrdenacao[colunaOrdenacao]} /{' '}
           {direcaoOrdenacao === 'asc' ? 'crescente' : 'decrescente'}. Clique no
-          botÃ£o HistÃ³rico para registrar informaÃ§Ãµes especÃ­ficas do orÃ§amento.
+          botão Histórico para registrar informações específicas do orçamento.
         </p>
       ) : null}
 
@@ -483,7 +487,7 @@ export default function HistoricoCliente({
           clienteId={clienteId}
           orcamento={orcamentoCancelamento}
           emailCancelamento={emailCancelamento}
-          solicitante={usuarioEmail || 'UsuÃ¡rio nÃ£o identificado'}
+          solicitante={usuarioEmail || 'Usuário não identificado'}
           motivo={motivoCancelamento}
           erro={erroCancelamento}
           enviando={enviandoCancelamento}

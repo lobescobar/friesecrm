@@ -51,6 +51,7 @@ export type ResultadoImportacao = {
   enviados: number;
   lotes: number;
   clientesAtivos: number;
+  origemImportacao?: string;
 };
 
 export type IndicesPlanilha = {

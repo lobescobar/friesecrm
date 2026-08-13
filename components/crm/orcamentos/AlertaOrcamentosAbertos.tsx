@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Button from '../../ui/Button';
 import LoadingSpinner from '../../ui/LoadingSpinner';
 import {
@@ -198,10 +198,10 @@ function textoOrdenacao(
   ordenacao: OrdenacaoOrcamentos
 ) {
   if (ordenacao.campo !== campo) {
-    return 'â†•';
+    return '↕';
   }
 
-  return ordenacao.direcao === 'desc' ? 'â†“' : 'â†‘';
+  return ordenacao.direcao === 'desc' ? '↓' : '↑';
 }
 
 function tituloOrdenacao(
@@ -231,7 +231,7 @@ export default function AlertaOrcamentosAbertos({
   });
 
   const retornoHook =
-    useOrcamentosAbertos() as RetornoUseOrcamentosAbertosCompat;
+    useOrcamentosAbertos(refreshKey) as RetornoUseOrcamentosAbertosCompat;
 
   const orcamentos = useMemo(
     () => obterListaOrcamentos(retornoHook),
@@ -265,24 +265,12 @@ export default function AlertaOrcamentosAbertos({
   const loading = Boolean(retornoHook.loading || retornoHook.carregando);
   const error = retornoHook.error || retornoHook.erro || null;
 
-  const carregar =
-    retornoHook.carregarOrcamentosAbertos ||
-    retornoHook.carregar ||
-    retornoHook.atualizar ||
-    retornoHook.refetch;
-
-  useEffect(() => {
-    if (carregar) {
-      void carregar();
-    }
-  }, [carregar, refreshKey]);
-
   const textoQuantidade = useMemo(() => {
     if (total === 1) {
-      return 'Existe 1 orÃ§amento em aberto.';
+      return 'Existe 1 orçamento em aberto.';
     }
 
-    return `Existem ${total} orÃ§amentos em aberto.`;
+    return `Existem ${total} orçamentos em aberto.`;
   }, [total]);
 
   function alterarOrdenacao(campo: CampoOrdenacao) {
@@ -320,7 +308,7 @@ export default function AlertaOrcamentosAbertos({
   if (loading && total === 0) {
     return (
       <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
-        <LoadingSpinner label="Carregando orÃ§amentos em aberto..." />
+        <LoadingSpinner label="Carregando orçamentos em aberto..." />
       </div>
     );
   }
@@ -328,7 +316,7 @@ export default function AlertaOrcamentosAbertos({
   if (error) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-        <strong>NÃ£o foi possÃ­vel carregar os orÃ§amentos em aberto.</strong>
+        <strong>Não foi possível carregar os orçamentos em aberto.</strong>
         <p className="mt-1">{error}</p>
       </div>
     );
@@ -341,7 +329,7 @@ export default function AlertaOrcamentosAbertos({
   if (total === 0) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
-        Nenhum orÃ§amento em aberto encontrado.
+        Nenhum orçamento em aberto encontrado.
       </div>
     );
   }
@@ -366,10 +354,10 @@ export default function AlertaOrcamentosAbertos({
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 bg-slate-50 px-4 py-3">
             <h3 className="text-sm font-bold text-slate-900">
-              OrÃ§amentos em aberto
+              Orçamentos em aberto
             </h3>
             <p className="text-xs text-slate-500">
-              Clique em um orÃ§amento para abrir o histÃ³rico do cliente.
+              Clique em um orçamento para abrir o histórico do cliente.
             </p>
           </div>
 
@@ -387,7 +375,7 @@ export default function AlertaOrcamentosAbertos({
                         : 'none'
                     }
                   >
-                    {botaoOrdenacao('orcamento', 'OrÃ§amento')}
+                    {botaoOrdenacao('orcamento', 'Orçamento')}
                   </th>
                   <th
                     className="px-4 py-3 text-left font-semibold"
@@ -411,10 +399,10 @@ export default function AlertaOrcamentosAbertos({
                         : 'none'
                     }
                   >
-                    {botaoOrdenacao('emissao', 'EmissÃ£o')}
+                    {botaoOrdenacao('emissao', 'Emissão')}
                   </th>
                   <th className="px-4 py-3 text-right font-semibold">
-                    AÃ§Ã£o
+                    Ação
                   </th>
                 </tr>
               </thead>

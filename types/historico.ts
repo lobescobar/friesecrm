@@ -19,6 +19,9 @@ export type HistoricoOrcamentoAgrupado = {
   pedido_venda: string | null;
   status: HistoricoOrcamento['status'];
   status_descricao: string;
+  cancelamento_solicitado?: boolean;
+  motivo_cancelamento?: string | null;
+  cancelamento_solicitado_em?: string | null;
   quantidade_itens: number;
   itens: HistoricoOrcamento[];
 };

@@ -47,7 +47,7 @@ function mensagemEhErro(mensagem?: string | null, erro?: string | null) {
     Boolean(erro) ||
     texto.startsWith('Informe') ||
     texto.startsWith('Limite') ||
-    texto.startsWith('NÃ£o foi possÃ­vel')
+    texto.startsWith('Não foi possível')
   );
 }
 
@@ -69,8 +69,8 @@ export default function ContatosCliente({
 
   const validar = (contato: FormContato) => {
     if (!contato.nome.trim()) return 'Informe o nome do contato.';
-    if (!telefoneValido(contato.telefone)) return 'Informe um telefone vÃ¡lido.';
-    if (!emailValido(contato.email)) return 'Informe um e-mail vÃ¡lido.';
+    if (!telefoneValido(contato.telefone)) return 'Informe um telefone válido.';
+    if (!emailValido(contato.email)) return 'Informe um e-mail válido.';
     return '';
   };
 
@@ -108,7 +108,7 @@ export default function ContatosCliente({
       setNovoContato(formularioInicial);
       setMensagem('Contato adicionado com sucesso.');
     } else {
-      setMensagem('NÃ£o foi possÃ­vel adicionar o contato.');
+      setMensagem('Não foi possível adicionar o contato.');
     }
   };
 
@@ -148,7 +148,7 @@ export default function ContatosCliente({
       setEditandoId(null);
       setMensagem('Contato atualizado com sucesso.');
     } else {
-      setMensagem('NÃ£o foi possÃ­vel atualizar o contato.');
+      setMensagem('Não foi possível atualizar o contato.');
     }
   };
 
@@ -159,14 +159,14 @@ export default function ContatosCliente({
     const sucesso = await onExcluir(id);
     setMensagem(
       sucesso
-        ? 'Contato excluÃ­do com sucesso.'
-        : 'NÃ£o foi possÃ­vel excluir o contato.'
+        ? 'Contato excluído com sucesso.'
+        : 'Não foi possível excluir o contato.'
     );
   };
 
   const definirEnderecoPadrao = async (contatoSelecionado: Contato) => {
     if (!contatoSelecionado.endereco_visita?.trim()) {
-      setMensagem('Informe um endereÃ§o de visita antes de marcar como padrÃ£o.');
+      setMensagem('Informe um endereço de visita antes de marcar como padrão.');
       return;
     }
 
@@ -182,7 +182,7 @@ export default function ContatosCliente({
         const atualizado = await onAtualizar(contato.id, { endereco_padrao: false });
 
         if (!atualizado) {
-          throw new Error('NÃ£o foi possÃ­vel desmarcar o endereÃ§o padrÃ£o anterior.');
+          throw new Error('Não foi possível desmarcar o endereço padrão anterior.');
         }
       }
 
@@ -191,15 +191,15 @@ export default function ContatosCliente({
       });
 
       if (!contatoAtualizado) {
-        throw new Error('NÃ£o foi possÃ­vel marcar o endereÃ§o como padrÃ£o.');
+        throw new Error('Não foi possível marcar o endereço como padrão.');
       }
 
-      setMensagem('EndereÃ§o padrÃ£o atualizado com sucesso.');
+      setMensagem('Endereço padrão atualizado com sucesso.');
     } catch (error) {
       const erro =
         error instanceof Error
           ? error.message
-          : 'NÃ£o foi possÃ­vel atualizar o endereÃ§o padrÃ£o.';
+          : 'Não foi possível atualizar o endereço padrão.';
       setMensagem(erro);
     } finally {
       setSalvando(false);
@@ -299,7 +299,7 @@ export default function ContatosCliente({
 
         <label className="mt-3 block">
           <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-400">
-            EndereÃ§o de visita
+            Endereço de visita
           </span>
           <textarea
             value={novoContato.endereco_visita}
@@ -311,7 +311,7 @@ export default function ContatosCliente({
             }
             rows={2}
             className="w-full rounded-xl border px-3 py-2 text-sm"
-            placeholder="Informe o endereÃ§o especÃ­fico para visitar este contato"
+            placeholder="Informe o endereço específico para visitar este contato"
             autoComplete="street-address"
           />
         </label>
@@ -434,7 +434,7 @@ export default function ContatosCliente({
 
                     <label className="block">
                       <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                        EndereÃ§o de visita
+                        Endereço de visita
                       </span>
                       <textarea
                         value={edicao.endereco_visita}
@@ -446,7 +446,7 @@ export default function ContatosCliente({
                         }
                         rows={2}
                         className="w-full rounded-xl border px-3 py-2 text-sm"
-                        placeholder="Informe o endereÃ§o especÃ­fico para visitar este contato"
+                        placeholder="Informe o endereço específico para visitar este contato"
                         autoComplete="street-address"
                       />
                     </label>
@@ -500,7 +500,7 @@ export default function ContatosCliente({
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                                EndereÃ§o de visita
+                                Endereço de visita
                               </p>
                               <p className="mt-1 whitespace-pre-line text-sm font-medium text-slate-700">
                                 {contato.endereco_visita}
@@ -510,9 +510,9 @@ export default function ContatosCliente({
                             {contato.endereco_padrao ? (
                               <span
                                 className="inline-flex h-[30px] items-center rounded-lg border border-amber-300 bg-amber-100 px-[10px] text-sm font-semibold leading-none text-amber-800"
-                                aria-label="Este Ã© o endereÃ§o padrÃ£o de visita"
+                                aria-label="Este é o endereço padrão de visita"
                               >
-                                PadrÃ£o
+                                Padrão
                               </span>
                             ) : (
                               <Button
@@ -521,16 +521,16 @@ export default function ContatosCliente({
                                 size="sm"
                                 onClick={() => definirEnderecoPadrao(contato)}
                                 disabled={salvando}
-                                aria-label={`Usar endereÃ§o de ${contato.nome} como padrÃ£o`}
+                                aria-label={`Usar endereço de ${contato.nome} como padrão`}
                               >
-                                Usar como padrÃ£o
+                                Usar como padrão
                               </Button>
                             )}
                           </div>
                         </div>
                       ) : (
                         <p className="mt-3 text-xs text-slate-400">
-                          Sem endereÃ§o de visita cadastrado.
+                          Sem endereço de visita cadastrado.
                         </p>
                       )}
                     </div>
@@ -544,7 +544,7 @@ export default function ContatosCliente({
                           className="rounded-full bg-green-50 p-2 text-green-600 transition hover:bg-green-100 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
                           aria-label={`Abrir WhatsApp de ${contato.nome}`}
                         >
-                          ðŸ“±
+                          📱
                         </a>
                       ) : null}
 
@@ -554,7 +554,7 @@ export default function ContatosCliente({
                           className="rounded-full bg-blue-50 p-2 text-blue-600 transition hover:bg-blue-100 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
                           aria-label={`Enviar e-mail para ${contato.nome}`}
                         >
-                          âœ‰ï¸
+                          &#9993;
                         </a>
                       ) : null}
 
@@ -564,7 +564,7 @@ export default function ContatosCliente({
                         className="rounded-full bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
                         aria-label={`Editar contato ${contato.nome}`}
                       >
-                        âœï¸
+                        &#9998;
                       </button>
 
                       <button
@@ -573,7 +573,7 @@ export default function ContatosCliente({
                         className="rounded-full bg-red-50 p-2 text-red-600 transition hover:bg-red-100 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
                         aria-label={`Excluir contato ${contato.nome}`}
                       >
-                        ðŸ—‘ï¸
+                        &#128465;
                       </button>
                     </div>
                   </div>

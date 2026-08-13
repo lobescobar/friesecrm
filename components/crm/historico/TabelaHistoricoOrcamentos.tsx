@@ -7,7 +7,8 @@ import type {
 import {
   formatarData,
   obterAriaSort,
-  obterClasseStatus,
+  obterClasseStatusOrcamento,
+  obterDescricaoStatusOrcamento,
   obterIconeOrdenacao
 } from '../../../utils/historicoOrcamentos';
 
@@ -115,11 +116,11 @@ export default function TabelaHistoricoOrcamentos({
                   </td>
                   <td className="px-4 py-3">
                     <span
-                      className={`rounded-full border px-2 py-1 text-xs font-bold ${obterClasseStatus(
-                        item.status
+                      className={`rounded-full border px-2 py-1 text-xs font-bold ${obterClasseStatusOrcamento(
+                        item
                       )}`}
                     >
-                      {item.status_descricao}
+                      {obterDescricaoStatusOrcamento(item)}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -170,13 +171,19 @@ export default function TabelaHistoricoOrcamentos({
                 </div>
 
                 <span
-                  className={`rounded-full border px-2 py-1 text-xs font-bold ${obterClasseStatus(
-                    item.status
+                  className={`rounded-full border px-2 py-1 text-xs font-bold ${obterClasseStatusOrcamento(
+                    item
                   )}`}
                 >
-                  {item.status_descricao}
+                  {obterDescricaoStatusOrcamento(item)}
                 </span>
               </div>
+
+              {item.cancelamento_solicitado ? (
+                <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800">
+                  Cancelamento solicitado
+                </p>
+              ) : null}
 
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>

@@ -17,7 +17,7 @@ export default function ClienteCardMobile({
         <div>
           <p className="text-base font-extrabold text-slate-950">{cliente.empresa}</p>
           <p className="mt-1 text-xs text-slate-500">
-            CÃ³d. ERP: {cliente.codigo_cliente || '-'}
+            Cód. ERP: {cliente.codigo_cliente || '-'}
           </p>
         </div>
         <BadgeStatus status={cliente.status} />

@@ -28,9 +28,9 @@ function IconeSort({
     >
       {ordenacao.coluna === coluna
         ? ordenacao.direcao === 'asc'
-          ? 'â–²'
-          : 'â–¼'
-        : 'â‡…'}
+          ? '▲'
+          : '▼'
+        : '⇅'}
     </span>
   );
 }
@@ -48,7 +48,7 @@ export default function TabelaClientes({
       <div className="p-5">
         <EmptyState
           title="Nenhum cliente cadastrado"
-          description="Importe uma planilha ERP ou cadastre clientes para comeÃ§ar a usar o CRM."
+          description="Importe uma planilha ERP ou cadastre clientes para começar a usar o CRM."
         />
       </div>
     );
@@ -90,7 +90,7 @@ export default function TabelaClientes({
                 className="cursor-pointer px-4 py-3 text-left font-semibold hover:bg-slate-100"
                 onClick={() => onOrdenar('codigo_cliente')}
               >
-                CÃ³d. ERP <IconeSort coluna="codigo_cliente" ordenacao={ordenacao} />
+                Cód. ERP <IconeSort coluna="codigo_cliente" ordenacao={ordenacao} />
               </th>
 
               <th

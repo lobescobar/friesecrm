@@ -84,7 +84,7 @@ export default function FiltrosClientes({
 
         <label className="flex flex-col gap-1">
           <span className="crm-label">
-            CÃ³d. ERP
+            Cód. ERP
           </span>
           <input
             type="text"

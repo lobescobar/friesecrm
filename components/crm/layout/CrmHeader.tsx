@@ -25,7 +25,7 @@ export default function CrmHeader({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <Image
           src="/logo.png"
-          alt="Friese AgroindÃºstria"
+          alt="Friese Agroindústria"
           width={190}
           height={60}
           priority

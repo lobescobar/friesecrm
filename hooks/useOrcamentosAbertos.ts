@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import {
+  buscarOrigemImportacaoOrcamentosAtual,
+  montarSufixoCacheOrigemImportacao
+} from '../lib/origemImportacaoOrcamentos';
 import { MESES_HISTORICO_ORCAMENTOS } from '../utils/constants';
 import {
   CACHE_TTL_CURTO_MS,
@@ -65,7 +69,13 @@ const TAMANHO_PAGINA_SUPABASE = 1000;
 //    B = Fechado
 //    C = Cancelado
 const CHAVE_CACHE_ORCAMENTOS_ABERTOS =
-  'orcamentos-abertos:v7-status-atual-upload';
+  'orcamentos-abertos:v8-lote-atual';
+
+function montarChaveCacheOrcamentosAbertos(origemImportacao: string | null) {
+  return `${CHAVE_CACHE_ORCAMENTOS_ABERTOS}:${montarSufixoCacheOrigemImportacao(
+    origemImportacao
+  )}`;
+}
 
 function calcularDataLimiteHistoricoOrcamentos() {
   const data = new Date();
@@ -218,20 +228,29 @@ function agruparEFiltrarOrcamentosAbertos(
     });
 }
 
-async function buscarTodasLinhasOrcamentosHistorico(dataLimite: string) {
+async function buscarTodasLinhasOrcamentosHistorico(
+  dataLimite: string,
+  origemImportacao: string | null
+) {
   const linhas: LinhaOrcamentoHistorico[] = [];
   let inicio = 0;
 
   while (true) {
     const fim = inicio + TAMANHO_PAGINA_SUPABASE - 1;
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('orcamentos_historico')
       .select(
         'id, cliente_id, codigo_cliente, codigo_cliente_loja, numero_orcamento, numero_it_completo, data_emissao, status, clientes(id, empresa, razao_social, nome_fantasia)'
       )
       .in('status', ['A', 'B', 'C'])
-      .gte('data_emissao', dataLimite)
+      .gte('data_emissao', dataLimite);
+
+    if (origemImportacao) {
+      query = query.eq('origem_importacao', origemImportacao);
+    }
+
+    const { data, error } = await query
       .order('codigo_cliente_loja', { ascending: true })
       .order('numero_orcamento', { ascending: true })
       .order('numero_it_completo', { ascending: true })
@@ -254,9 +273,15 @@ async function buscarTodasLinhasOrcamentosHistorico(dataLimite: string) {
   return linhas;
 }
 
-async function carregarOrcamentosAbertos() {
+async function carregarOrcamentosAbertosDaBase(
+  origemImportacao: string | null
+) {
   const dataLimite = calcularDataLimiteHistoricoOrcamentos();
-  const linhas = await buscarTodasLinhasOrcamentosHistorico(dataLimite);
+  const linhas = await buscarTodasLinhasOrcamentosHistorico(
+    dataLimite,
+    origemImportacao
+  );
+
   return agruparEFiltrarOrcamentosAbertos(linhas);
 }
 
@@ -293,10 +318,13 @@ export function useOrcamentosAbertos(refreshKey = 0) {
     }));
 
     try {
-      const orcamentos = await carregarOrcamentosAbertos();
+      const origemImportacao = await buscarOrigemImportacaoOrcamentosAtual();
+      const orcamentos = await carregarOrcamentosAbertosDaBase(
+        origemImportacao
+      );
 
       salvarCacheSessao(
-        CHAVE_CACHE_ORCAMENTOS_ABERTOS,
+        montarChaveCacheOrcamentosAbertos(origemImportacao),
         orcamentos
       );
 
@@ -323,23 +351,6 @@ export function useOrcamentosAbertos(refreshKey = 0) {
   }, []);
 
   useEffect(() => {
-    const cache = lerCacheSessao<OrcamentoAbertoResumo[]>(
-      CHAVE_CACHE_ORCAMENTOS_ABERTOS,
-      CACHE_TTL_CURTO_MS
-    );
-
-    if (cache) {
-      orcamentosRef.current = cache;
-
-      setEstado({
-        orcamentos: cache,
-        loading: false,
-        error: null
-      });
-
-      return;
-    }
-
     let cancelado = false;
 
     async function carregar() {
@@ -350,14 +361,42 @@ export function useOrcamentosAbertos(refreshKey = 0) {
       }));
 
       try {
-        const orcamentos = await carregarOrcamentosAbertos();
+        const origemImportacao = await buscarOrigemImportacaoOrcamentosAtual();
+        const cacheKey = montarChaveCacheOrcamentosAbertos(origemImportacao);
+
+        if (refreshKey === 0) {
+          const cache = lerCacheSessao<OrcamentoAbertoResumo[]>(
+            cacheKey,
+            CACHE_TTL_CURTO_MS
+          );
+
+          if (cache) {
+            if (cancelado) {
+              return;
+            }
+
+            orcamentosRef.current = cache;
+
+            setEstado({
+              orcamentos: cache,
+              loading: false,
+              error: null
+            });
+
+            return;
+          }
+        }
+
+        const orcamentos = await carregarOrcamentosAbertosDaBase(
+          origemImportacao
+        );
 
         if (cancelado) {
           return;
         }
 
         salvarCacheSessao(
-          CHAVE_CACHE_ORCAMENTOS_ABERTOS,
+          cacheKey,
           orcamentos
         );
 

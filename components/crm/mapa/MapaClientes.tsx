@@ -80,7 +80,7 @@ function BuscaMapa() {
       retainZoomLevel: false,
       animateZoom: true,
       keepResult: true,
-      searchLabel: 'Pesquisar endereÃ§o...'
+      searchLabel: 'Pesquisar endereço...'
     }) as L.Control;
 
     map.addControl(searchControl);
