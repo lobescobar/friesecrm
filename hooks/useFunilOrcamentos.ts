@@ -172,7 +172,7 @@ function montarChaveCache(isAdmin: boolean, filtros: FiltrosFunilOrcamentos) {
   const periodo = filtros.periodo || FILTRO_TODOS_PERIODOS;
   const mes = filtros.mes || FILTRO_TODOS_MESES;
 
-  return `funil-orcamentos:v16-${alcance}:area-${area}:periodo-${periodo}:mes-${mes}`;
+  return `funil-orcamentos:v18-status-principal-${alcance}:area-${area}:periodo-${periodo}:mes-${mes}`;
 }
 
 function montarChaveCacheOpcoes(isAdmin: boolean) {
@@ -238,7 +238,7 @@ function obterNumeroPrincipal(linha: LinhaFunilBase) {
   return normalizarTexto(linha.numero_it_completo).split('-')[0] || '';
 }
 
-function obterChaveOrcamento(linha: LinhaFunilBase, dataReferencia?: string | null) {
+function obterChaveOrcamento(linha: LinhaFunilBase) {
   const codigoClienteLoja = normalizarTexto(linha.codigo_cliente_loja);
   const numeroOrcamento = obterNumeroPrincipal(linha);
 
@@ -246,9 +246,8 @@ function obterChaveOrcamento(linha: LinhaFunilBase, dataReferencia?: string | nu
     return '';
   }
 
-  return `${codigoClienteLoja}|${numeroOrcamento}|${linha.status}|${dataReferencia || 'sem-data'}`;
+  return `${codigoClienteLoja}|${numeroOrcamento}`;
 }
-
 function montarIntervaloData(filtros: FiltrosFunilOrcamentos) {
   if (filtros.periodo === FILTRO_TODOS_PERIODOS) {
     return null;
@@ -476,14 +475,12 @@ function calcularResumoStatus(
   status: StatusFunilOrcamento,
   linhas: LinhaFunilBase[]
 ): FunilOrcamentoResumoStatus {
-  const campoData = DATA_REFERENCIA_STATUS[status];
   const orcamentosUnicos = new Set<string>();
   const clientesUnicos = new Set<string>();
   let valorTotal = 0;
 
   linhas.forEach((linha) => {
-    const dataReferencia = linha[campoData] as string | null | undefined;
-    const chave = obterChaveOrcamento(linha, dataReferencia || null);
+    const chave = obterChaveOrcamento(linha);
 
     if (chave) {
       orcamentosUnicos.add(chave);
@@ -518,7 +515,7 @@ function calcularTotalAnalisadoPorEmissao(linhas: LinhaFunilBase[]) {
   let valorTotal = 0;
 
   linhas.forEach((linha) => {
-    const chave = obterChaveOrcamento(linha, linha.data_emissao || null);
+    const chave = obterChaveOrcamento(linha);
 
     if (chave) {
       orcamentosUnicos.add(chave);
