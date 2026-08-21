@@ -48,6 +48,18 @@ export interface Profile {
   updated_at?: string | null;
 }
 
+export interface MetaComercial {
+  id: string;
+  vendedor_email: string;
+  ano: number;
+  mes: number;
+  valor_meta: number | string;
+  criado_por?: string | null;
+  atualizado_por?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
 export type StatusOrcamentoCodigo = 'A' | 'B' | 'C';
 
 export interface HistoricoOrcamento {

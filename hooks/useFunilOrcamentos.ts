@@ -9,6 +9,7 @@ import {
   lerCacheSessao,
   salvarCacheSessao
 } from '../utils/sessionCache';
+import type { Cliente, MetaComercial, Profile } from '../types';
 
 export type StatusFunilOrcamento = 'A' | 'B' | 'C';
 
@@ -32,6 +33,24 @@ export type FunilOrcamentosResumo = {
   ticketMedio: number;
   periodoDescricao: string;
   status: FunilOrcamentoResumoStatus[];
+  metas: FunilMetasResumo;
+};
+
+export type FunilMetaVendedor = {
+  vendedorEmail: string;
+  estados: string[];
+  meta: number;
+  realizado: number;
+  percentual: number;
+  saldo: number;
+};
+
+export type FunilMetasResumo = {
+  metaGlobal: number;
+  realizadoGlobal: number;
+  percentualGlobal: number;
+  saldoGlobal: number;
+  vendedores: FunilMetaVendedor[];
 };
 
 export type FiltrosFunilOrcamentos = {
@@ -59,6 +78,8 @@ type LinhaFunilBase = {
   data_fechamento?: string | null;
   data_cancelamento?: string | null;
 };
+
+type LinhaClienteEstado = Pick<Cliente, 'id' | 'estado'>;
 
 type EstadoFunilOrcamentos = {
   resumo: FunilOrcamentosResumo;
@@ -124,6 +145,14 @@ const MESES_NOMES: Record<string, string> = {
   '12': 'Dezembro'
 };
 
+const metasVazias: FunilMetasResumo = {
+  metaGlobal: 0,
+  realizadoGlobal: 0,
+  percentualGlobal: 0,
+  saldoGlobal: 0,
+  vendedores: []
+};
+
 const resumoVazio: FunilOrcamentosResumo = {
   totalOrcamentos: 0,
   totalItens: 0,
@@ -131,6 +160,7 @@ const resumoVazio: FunilOrcamentosResumo = {
   valorTotal: 0,
   ticketMedio: 0,
   periodoDescricao: '',
+  metas: metasVazias,
   status: STATUS_ORDEM.map((status) => ({
     status,
     titulo: STATUS_CONFIG[status].titulo,
@@ -181,7 +211,7 @@ function montarChaveCache(
   const mes = filtros.mes || FILTRO_TODOS_MESES;
   const origem = montarSufixoCacheOrigemImportacao(origemImportacao);
 
-  return `funil-orcamentos:v19-lote-atual-${origem}:${alcance}:area-${area}:periodo-${periodo}:mes-${mes}`;
+  return `funil-orcamentos:v20-metas-lote-atual-${origem}:${alcance}:area-${area}:periodo-${periodo}:mes-${mes}`;
 }
 
 function montarChaveCacheOpcoes(
@@ -503,6 +533,78 @@ async function buscarLinhasTotalOrcado(
   });
 }
 
+async function buscarMetasComerciais(filtros: FiltrosFunilOrcamentos) {
+  let query = supabase
+    .from('metas_comerciais')
+    .select('*')
+    .order('vendedor_email', { ascending: true });
+
+  if (filtros.periodo !== FILTRO_TODOS_PERIODOS) {
+    query = query.eq('ano', Number(filtros.periodo));
+  }
+
+  if (filtros.mes !== FILTRO_TODOS_MESES) {
+    query = query.eq('mes', Number(filtros.mes));
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  return (data || []) as MetaComercial[];
+}
+
+async function buscarVendedoresFunil() {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id,email,role,segmentos_permitidos,estados_permitidos,created_at,updated_at')
+    .eq('role', 'vendedor')
+    .order('email', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data || []) as Profile[];
+}
+
+function dividirEmLotes<T>(itens: T[], tamanho: number) {
+  const lotes: T[][] = [];
+
+  for (let indice = 0; indice < itens.length; indice += tamanho) {
+    lotes.push(itens.slice(indice, indice + tamanho));
+  }
+
+  return lotes;
+}
+
+async function buscarEstadosClientes(clienteIds: string[]) {
+  const estadosPorCliente = new Map<string, string>();
+  const idsUnicos = Array.from(new Set(clienteIds.filter(Boolean)));
+
+  for (const lote of dividirEmLotes(idsUnicos, 500)) {
+    const { data, error } = await supabase
+      .from('clientes')
+      .select('id,estado')
+      .in('id', lote);
+
+    if (error) {
+      throw error;
+    }
+
+    ((data || []) as LinhaClienteEstado[]).forEach((cliente) => {
+      estadosPorCliente.set(
+        cliente.id,
+        normalizarTexto(cliente.estado).toUpperCase()
+      );
+    });
+  }
+
+  return estadosPorCliente;
+}
+
 
 
 function calcularResumoStatus(
@@ -570,6 +672,76 @@ function calcularTotalAnalisadoPorEmissao(linhas: LinhaFunilBase[]) {
   };
 }
 
+function calcularPercentualMeta(realizado: number, meta: number) {
+  if (meta <= 0) {
+    return realizado > 0 ? 100 : 0;
+  }
+
+  return Math.round((realizado / meta) * 100);
+}
+
+function calcularResumoMetas(
+  metas: MetaComercial[],
+  vendedores: Profile[],
+  linhasFechadas: LinhaFunilBase[],
+  estadosPorCliente: Map<string, string>,
+  realizadoGlobal: number
+): FunilMetasResumo {
+  const metaPorEmail = new Map<string, number>();
+
+  metas.forEach((meta) => {
+    const email = normalizarTexto(meta.vendedor_email).toLowerCase();
+    const valorAtual = metaPorEmail.get(email) || 0;
+
+    metaPorEmail.set(
+      email,
+      valorAtual + normalizarValorMonetario(meta.valor_meta)
+    );
+  });
+
+  const vendedoresResumo = vendedores.map((vendedor) => {
+    const vendedorEmail = normalizarTexto(vendedor.email).toLowerCase();
+    const estados = (vendedor.estados_permitidos || [])
+      .map((estado) => normalizarTexto(estado).toUpperCase())
+      .filter(Boolean);
+    const todosEstados = estados.length === 0;
+    const meta = metaPorEmail.get(vendedorEmail) || 0;
+    let realizado = 0;
+
+    linhasFechadas.forEach((linha) => {
+      const estadoCliente = linha.cliente_id
+        ? estadosPorCliente.get(linha.cliente_id) || ''
+        : '';
+
+      if (todosEstados || estados.includes(estadoCliente)) {
+        realizado += normalizarValorMonetario(linha.valor_total);
+      }
+    });
+
+    return {
+      vendedorEmail: vendedor.email,
+      estados,
+      meta,
+      realizado,
+      percentual: calcularPercentualMeta(realizado, meta),
+      saldo: realizado - meta
+    };
+  });
+
+  const metaGlobal = vendedoresResumo.reduce(
+    (total, vendedor) => total + vendedor.meta,
+    0
+  );
+
+  return {
+    metaGlobal,
+    realizadoGlobal,
+    percentualGlobal: calcularPercentualMeta(realizadoGlobal, metaGlobal),
+    saldoGlobal: realizadoGlobal - metaGlobal,
+    vendedores: vendedoresResumo.sort((a, b) => b.percentual - a.percentual)
+  };
+}
+
 function calcularResumo(
   linhasPorStatus: Record<StatusFunilOrcamento, LinhaFunilBase[]>,
   linhasTotalAnalisado: LinhaFunilBase[],
@@ -621,6 +793,7 @@ function calcularResumo(
         ? totalAnalisado.valorTotal / totalAnalisado.totalOrcamentos
         : 0,
     periodoDescricao,
+    metas: metasVazias,
     status
   };
 }
@@ -722,20 +895,36 @@ export function useFunilOrcamentos(isAdmin: boolean, refreshKey = 0) {
           ? Promise.resolve(opcoesEmCache)
           : buscarOpcoesFunilOrcamentos(isAdmin, origemImportacao);
 
-      const [opcoes, abertos, fechados, cancelados, totalAnalisado] =
+      const [
+        opcoes,
+        abertos,
+        fechados,
+        cancelados,
+        totalAnalisado,
+        metas,
+        vendedores
+      ] =
         await Promise.all([
           promessaOpcoes,
           buscarLinhasPorStatus('A', filtros, origemImportacao),
           buscarLinhasPorStatus('B', filtros, origemImportacao),
           buscarLinhasPorStatus('C', filtros, origemImportacao),
-          buscarLinhasTotalOrcado(filtros, origemImportacao)
+          buscarLinhasTotalOrcado(filtros, origemImportacao),
+          buscarMetasComerciais(filtros),
+          buscarVendedoresFunil()
         ]);
+
+      const estadosPorCliente = await buscarEstadosClientes(
+        fechados
+          .map((linha) => linha.cliente_id)
+          .filter((clienteId): clienteId is string => Boolean(clienteId))
+      );
 
       if (numeroRequisicao !== numeroRequisicaoRef.current) {
         return;
       }
 
-      const resumo = calcularResumo(
+      const resumoBase = calcularResumo(
         {
           A: abertos,
           B: fechados,
@@ -744,6 +933,18 @@ export function useFunilOrcamentos(isAdmin: boolean, refreshKey = 0) {
         totalAnalisado,
         periodoDescricao
       );
+      const realizadoGlobal =
+        resumoBase.status.find((item) => item.status === 'B')?.valorTotal || 0;
+      const resumo: FunilOrcamentosResumo = {
+        ...resumoBase,
+        metas: calcularResumoMetas(
+          metas,
+          vendedores,
+          fechados,
+          estadosPorCliente,
+          realizadoGlobal
+        )
+      };
 
       const cacheAtualizado = { resumo, opcoes };
 

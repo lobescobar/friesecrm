@@ -4,7 +4,9 @@ import Button from '../../ui/Button';
 import LoadingSpinner from '../../ui/LoadingSpinner';
 import {
   FILTROS_FUNIL_ORCAMENTOS,
+  FunilMetaVendedor,
   FunilOrcamentoResumoStatus,
+  FunilMetasResumo,
   useFunilOrcamentos
 } from '../../../hooks/useFunilOrcamentos';
 
@@ -52,6 +54,77 @@ function formatarMoeda(valor: number) {
     currency: 'BRL',
     maximumFractionDigits: 0
   });
+}
+
+function formatarPercentual(valor: number) {
+  return `${formatarNumero(valor)}%`;
+}
+
+function classeSaldo(valor: number) {
+  if (valor >= 0) {
+    return 'text-green-700';
+  }
+
+  return 'text-red-700';
+}
+
+function MetaIndicador({
+  titulo,
+  valor,
+  apoio,
+  destaque
+}: {
+  titulo: string;
+  valor: string;
+  apoio: string;
+  destaque?: string;
+}) {
+  return (
+    <div className="min-h-[70px] rounded-2xl border border-slate-200 bg-white px-4 py-3">
+      <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+        {titulo}
+      </p>
+      <p className={`mt-1 text-lg font-extrabold leading-none ${destaque || 'text-slate-950'}`}>
+        {valor}
+      </p>
+      <p className="mt-1 truncate text-[11px] font-medium text-slate-500">
+        {apoio}
+      </p>
+    </div>
+  );
+}
+
+function MetasResumo({ metas }: { metas: FunilMetasResumo }) {
+  return (
+    <div className="mb-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <MetaIndicador
+          titulo="Meta global"
+          valor={formatarMoeda(metas.metaGlobal)}
+          apoio="Soma das metas dos vendedores"
+        />
+        <MetaIndicador
+          titulo="Realizado"
+          valor={formatarMoeda(metas.realizadoGlobal)}
+          apoio="Orçamentos fechados"
+        />
+        <MetaIndicador
+          titulo="Atingimento"
+          valor={formatarPercentual(metas.percentualGlobal)}
+          apoio="Realizado dividido pela meta"
+          destaque={
+            metas.percentualGlobal >= 100 ? 'text-green-700' : 'text-slate-950'
+          }
+        />
+        <MetaIndicador
+          titulo="Saldo"
+          valor={formatarMoeda(metas.saldoGlobal)}
+          apoio={metas.saldoGlobal >= 0 ? 'Acima da meta' : 'Faltante'}
+          destaque={classeSaldo(metas.saldoGlobal)}
+        />
+      </div>
+    </div>
+  );
 }
 
 function FunilStatusCard({ item }: { item: FunilOrcamentoResumoStatus }) {
@@ -105,6 +178,97 @@ function FunilBarra({ item }: { item: FunilOrcamentoResumoStatus }) {
           style={{ width: `${largura}%` }}
           aria-hidden="true"
         />
+      </div>
+    </div>
+  );
+}
+
+function LinhaMetaVendedor({ item }: { item: FunilMetaVendedor }) {
+  const largura = Math.min(Math.max(item.percentual, item.realizado > 0 ? 4 : 0), 100);
+
+  return (
+    <tr className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+      <td className="px-4 py-3">
+        <p className="font-bold text-slate-900">{item.vendedorEmail}</p>
+        <p className="mt-1 text-[11px] font-medium text-slate-500">
+          UF: {item.estados.length ? item.estados.join(', ') : 'Todos'}
+        </p>
+      </td>
+      <td className="px-4 py-3 text-right font-semibold text-slate-700">
+        {formatarMoeda(item.meta)}
+      </td>
+      <td className="px-4 py-3 text-right font-semibold text-slate-700">
+        {formatarMoeda(item.realizado)}
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center justify-end gap-2">
+          <div className="h-2 w-24 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className={`h-full rounded-full ${
+                item.percentual >= 100 ? 'bg-green-700' : 'bg-amber-600'
+              }`}
+              style={{ width: `${largura}%` }}
+              aria-hidden="true"
+            />
+          </div>
+          <span className="w-12 text-right text-xs font-extrabold text-slate-700">
+            {formatarPercentual(item.percentual)}
+          </span>
+        </div>
+      </td>
+      <td className={`px-4 py-3 text-right font-bold ${classeSaldo(item.saldo)}`}>
+        {formatarMoeda(item.saldo)}
+      </td>
+    </tr>
+  );
+}
+
+function MetasPorVendedor({ metas }: { metas: FunilMetasResumo }) {
+  if (metas.vendedores.length === 0) {
+    return (
+      <p className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-500">
+        Nenhuma meta por vendedor encontrada para os filtros atuais.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+        <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-700">
+          Meta por vendedor
+        </h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <caption className="sr-only">
+            Relação de metas, realizado e atingimento por vendedor.
+          </caption>
+          <thead className="border-b border-slate-200 bg-white text-xs text-slate-500">
+            <tr>
+              <th scope="col" className="px-4 py-2 text-left font-bold">
+                Vendedor
+              </th>
+              <th scope="col" className="px-4 py-2 text-right font-bold">
+                Meta
+              </th>
+              <th scope="col" className="px-4 py-2 text-right font-bold">
+                Realizado
+              </th>
+              <th scope="col" className="px-4 py-2 text-right font-bold">
+                Ating.
+              </th>
+              <th scope="col" className="px-4 py-2 text-right font-bold">
+                Saldo
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {metas.vendedores.map((item) => (
+              <LinhaMetaVendedor key={item.vendedorEmail} item={item} />
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -240,6 +404,8 @@ export default function FunilOrcamentos({
         </div>
       ) : null}
 
+      <MetasResumo metas={resumo.metas} />
+
       <div className="mb-3 grid gap-3 sm:grid-cols-3">
         {resumo.status.map((item) => (
           <FunilStatusCard key={item.status} item={item} />
@@ -271,6 +437,8 @@ export default function FunilOrcamentos({
           </div>
         </div>
       </div>
+
+      <MetasPorVendedor metas={resumo.metas} />
 
       {resumo.totalOrcamentos === 0 && !error ? (
         <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800">

@@ -7,6 +7,7 @@ import { ESTADOS_BRASIL, SEGMENTOS_CLIENTES } from '../../../utils/constants';
 import { valorLista } from '../../../utils/validators';
 import Button from '../../ui/Button';
 import Modal from '../../ui/Modal';
+import MetasComerciaisAdmin from './MetasComerciaisAdmin';
 import RegrasCancelamentoOrcamentos from './RegrasCancelamentoOrcamentos';
 
 type GestaoUsuariosProps = {
@@ -316,6 +317,8 @@ export default function GestaoUsuarios({
 
   return (
     <>
+      <MetasComerciaisAdmin />
+
       <RegrasCancelamentoOrcamentos segmentosDisponiveis={segmentos} />
 
       <section
