@@ -75,7 +75,7 @@ export default function MetasComerciaisAdmin() {
     const [usuariosResultado, metasResultado] = await Promise.all([
       supabase
         .from('profiles')
-        .select('id,email,role,segmentos_permitidos,estados_permitidos,created_at,updated_at')
+        .select('id,email,role,segmentos_permitidos,estados_permitidos')
         .eq('role', 'vendedor')
         .order('email', { ascending: true }),
       supabase

@@ -559,7 +559,7 @@ async function buscarMetasComerciais(filtros: FiltrosFunilOrcamentos) {
 async function buscarVendedoresFunil() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id,email,role,segmentos_permitidos,estados_permitidos,created_at,updated_at')
+    .select('id,email,role,segmentos_permitidos,estados_permitidos')
     .eq('role', 'vendedor')
     .order('email', { ascending: true });
 
