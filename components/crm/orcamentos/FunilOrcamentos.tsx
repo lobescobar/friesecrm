@@ -1,5 +1,6 @@
 ﻿'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import Button from '../../ui/Button';
 import LoadingSpinner from '../../ui/LoadingSpinner';
 import {
@@ -13,6 +14,11 @@ import {
 type FunilOrcamentosProps = {
   isAdmin: boolean;
   refreshKey?: number;
+};
+
+type OpcaoFiltroMultiplo = {
+  valor: string;
+  rotulo: string;
 };
 
 const STATUS_VISUAL: Record<
@@ -66,6 +72,171 @@ function classeSaldo(valor: number) {
   }
 
   return 'text-red-700';
+}
+
+function descreverFiltroMultiplo(
+  valores: string[],
+  opcoes: OpcaoFiltroMultiplo[],
+  valorTodos: string,
+  rotuloTodos: string
+) {
+  if (valores.includes(valorTodos) || valores.length === 0) {
+    return rotuloTodos;
+  }
+
+  if (valores.length === 1) {
+    return (
+      opcoes.find((opcao) => opcao.valor === valores[0])?.rotulo || valores[0]
+    );
+  }
+
+  return `${valores.length} selecionados`;
+}
+
+function ordenarSelecaoPorOpcoes(
+  valores: string[],
+  opcoes: OpcaoFiltroMultiplo[]
+) {
+  const ordem = new Map(opcoes.map((opcao, indice) => [opcao.valor, indice]));
+
+  return [...valores].sort(
+    (a, b) => (ordem.get(a) ?? 999) - (ordem.get(b) ?? 999)
+  );
+}
+
+function FiltroMultiplo({
+  label,
+  ariaLabel,
+  valores,
+  opcoes,
+  valorTodos,
+  rotuloTodos,
+  incluirTodos = true,
+  onChange
+}: {
+  label: string;
+  ariaLabel: string;
+  valores: string[];
+  opcoes: OpcaoFiltroMultiplo[];
+  valorTodos: string;
+  rotuloTodos: string;
+  incluirTodos?: boolean;
+  onChange: (valores: string[]) => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const todosSelecionados = valores.includes(valorTodos) || valores.length === 0;
+  const textoBotao = descreverFiltroMultiplo(
+    valores,
+    opcoes,
+    valorTodos,
+    rotuloTodos
+  );
+
+  useEffect(() => {
+    if (!aberto) {
+      return;
+    }
+
+    function fecharAoClicarFora(event: MouseEvent) {
+      const alvo = event.target;
+
+      if (
+        alvo instanceof Node &&
+        containerRef.current &&
+        !containerRef.current.contains(alvo)
+      ) {
+        setAberto(false);
+      }
+    }
+
+    document.addEventListener('mousedown', fecharAoClicarFora);
+
+    return () => {
+      document.removeEventListener('mousedown', fecharAoClicarFora);
+    };
+  }, [aberto]);
+
+  function alternarTodos() {
+    onChange([valorTodos]);
+  }
+
+  function alternarValor(valor: string) {
+    if (todosSelecionados) {
+      onChange([valor]);
+      return;
+    }
+
+    if (valores.includes(valor)) {
+      const proximaSelecao = valores.filter((item) => item !== valor);
+
+      if (proximaSelecao.length === 0) {
+        onChange(incluirTodos ? [valorTodos] : [valor]);
+        return;
+      }
+
+      onChange(ordenarSelecaoPorOpcoes(proximaSelecao, opcoes));
+      return;
+    }
+
+    onChange(ordenarSelecaoPorOpcoes([...valores, valor], opcoes));
+  }
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <span className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-slate-500">
+        {label}
+      </span>
+      <button
+        type="button"
+        className="flex h-[30px] w-full items-center justify-between gap-2 rounded-lg border border-slate-300 bg-white px-[10px] py-0 text-left text-sm font-semibold text-slate-900 shadow-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+        aria-label={ariaLabel}
+        aria-expanded={aberto}
+        aria-haspopup="listbox"
+        onClick={() => setAberto((valorAtual) => !valorAtual)}
+      >
+        <span className="min-w-0 truncate">{textoBotao}</span>
+        <span className="text-xs text-slate-500" aria-hidden="true">
+          v
+        </span>
+      </button>
+
+      {aberto ? (
+        <div
+          className="absolute right-0 z-30 mt-1 max-h-72 w-56 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg"
+          role="listbox"
+          aria-label={ariaLabel}
+        >
+          {incluirTodos ? (
+            <label className="flex cursor-pointer items-center gap-2 px-3 py-2 font-semibold text-slate-900 hover:bg-slate-50">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-600"
+                checked={todosSelecionados}
+                onChange={alternarTodos}
+              />
+              <span>{rotuloTodos}</span>
+            </label>
+          ) : null}
+
+          {opcoes.map((opcao) => (
+            <label
+              key={opcao.valor}
+              className="flex cursor-pointer items-center gap-2 px-3 py-2 font-medium text-slate-800 hover:bg-slate-50"
+            >
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-600"
+                checked={!todosSelecionados && valores.includes(opcao.valor)}
+                onChange={() => alternarValor(opcao.valor)}
+              />
+              <span className="truncate">{opcao.rotulo}</span>
+            </label>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function MetaIndicador({
@@ -285,10 +456,18 @@ export default function FunilOrcamentos({
     loading,
     error,
     setFiltroArea,
-    setFiltroPeriodo,
-    setFiltroMes,
+    setFiltroPeriodos,
+    setFiltroMeses,
     carregarFunilOrcamentos
   } = useFunilOrcamentos(isAdmin, refreshKey);
+  const opcoesPeriodos = opcoes.periodos.map((periodo) => ({
+    valor: periodo,
+    rotulo: periodo
+  }));
+  const opcoesMeses = opcoes.meses.map((mes) => ({
+    valor: mes,
+    rotulo: FILTROS_FUNIL_ORCAMENTOS.MESES_NOMES[mes] || mes
+  }));
 
   if (loading && resumo.totalOrcamentos === 0) {
     return (
@@ -316,7 +495,7 @@ export default function FunilOrcamentos({
           </p>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-[170px_130px_140px_auto] sm:items-end">
+        <div className="grid gap-2 sm:grid-cols-[170px_170px_170px_auto] sm:items-end">
           <label className="block">
             <span className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-slate-500">
               Área
@@ -338,49 +517,26 @@ export default function FunilOrcamentos({
             </select>
           </label>
 
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-slate-500">
-              Período
-            </span>
-            <select
-              className="h-[30px] w-full rounded-lg border border-slate-300 bg-white px-[10px] py-0 text-sm font-semibold text-slate-900 shadow-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-              value={filtros.periodo}
-              onChange={(event) => setFiltroPeriodo(event.target.value)}
-              aria-label="Filtrar funil por ano do período"
-            >
-              {isAdmin ? (
-                <option value={FILTROS_FUNIL_ORCAMENTOS.TODOS_PERIODOS}>
-                  Todos
-                </option>
-              ) : null}
-              {opcoes.periodos.map((periodo) => (
-                <option key={periodo} value={periodo}>
-                  {periodo}
-                </option>
-              ))}
-            </select>
-          </label>
+          <FiltroMultiplo
+            label="Ano"
+            ariaLabel="Filtrar funil por um ou mais anos"
+            valores={filtros.periodos}
+            opcoes={opcoesPeriodos}
+            valorTodos={FILTROS_FUNIL_ORCAMENTOS.TODOS_PERIODOS}
+            rotuloTodos="Todos"
+            incluirTodos={isAdmin}
+            onChange={setFiltroPeriodos}
+          />
 
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-slate-500">
-              Mês
-            </span>
-            <select
-              className="h-[30px] w-full rounded-lg border border-slate-300 bg-white px-[10px] py-0 text-sm font-semibold text-slate-900 shadow-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-              value={filtros.mes}
-              onChange={(event) => setFiltroMes(event.target.value)}
-              aria-label="Refinar funil por mês"
-            >
-              <option value={FILTROS_FUNIL_ORCAMENTOS.TODOS_MESES}>
-                Todos
-              </option>
-              {opcoes.meses.map((mes) => (
-                <option key={mes} value={mes}>
-                  {FILTROS_FUNIL_ORCAMENTOS.MESES_NOMES[mes] || mes}
-                </option>
-              ))}
-            </select>
-          </label>
+          <FiltroMultiplo
+            label="Mês"
+            ariaLabel="Filtrar funil por um ou mais meses"
+            valores={filtros.meses}
+            opcoes={opcoesMeses}
+            valorTodos={FILTROS_FUNIL_ORCAMENTOS.TODOS_MESES}
+            rotuloTodos="Todos"
+            onChange={setFiltroMeses}
+          />
 
           <Button
             type="button"

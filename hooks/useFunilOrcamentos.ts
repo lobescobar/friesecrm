@@ -55,8 +55,8 @@ export type FunilMetasResumo = {
 
 export type FiltrosFunilOrcamentos = {
   area: string;
-  periodo: string;
-  mes: string;
+  periodos: string[];
+  meses: string[];
 };
 
 export type OpcoesFunilOrcamentos = {
@@ -191,8 +191,8 @@ function calcularAnoCorrente() {
 function montarFiltrosIniciais(isAdmin: boolean): FiltrosFunilOrcamentos {
   return {
     area: FILTRO_TODAS_AREAS,
-    periodo: isAdmin ? FILTRO_TODOS_PERIODOS : calcularAnoCorrente(),
-    mes: FILTRO_TODOS_MESES
+    periodos: [isAdmin ? FILTRO_TODOS_PERIODOS : calcularAnoCorrente()],
+    meses: [FILTRO_TODOS_MESES]
   };
 }
 
@@ -207,11 +207,17 @@ function montarChaveCache(
 ) {
   const alcance = isAdmin ? 'admin-todos' : `vendedor-${calcularAnoCorrente()}`;
   const area = filtros.area || FILTRO_TODAS_AREAS;
-  const periodo = filtros.periodo || FILTRO_TODOS_PERIODOS;
-  const mes = filtros.mes || FILTRO_TODOS_MESES;
+  const periodos = normalizarFiltroMultiplo(
+    filtros.periodos,
+    FILTRO_TODOS_PERIODOS
+  ).join(',');
+  const meses = normalizarFiltroMultiplo(
+    filtros.meses,
+    FILTRO_TODOS_MESES
+  ).join(',');
   const origem = montarSufixoCacheOrigemImportacao(origemImportacao);
 
-  return `funil-orcamentos:v20-metas-lote-atual-${origem}:${alcance}:area-${area}:periodo-${periodo}:mes-${mes}`;
+  return `funil-orcamentos:v21-metas-lote-atual-${origem}:${alcance}:area-${area}:periodos-${periodos}:meses-${meses}`;
 }
 
 function montarChaveCacheOpcoes(
@@ -255,6 +261,35 @@ function ordenarDecrescente(a: string, b: string) {
   return b.localeCompare(a, 'pt-BR', { numeric: true });
 }
 
+function normalizarFiltroMultiplo(
+  valores: string[] | string | undefined,
+  valorTodos: string
+) {
+  const lista = Array.isArray(valores) ? valores : valores ? [valores] : [];
+  const filtrados = Array.from(
+    new Set(lista.map((valor) => normalizarTexto(valor)).filter(Boolean))
+  );
+
+  if (filtrados.length === 0 || filtrados.includes(valorTodos)) {
+    return [valorTodos];
+  }
+
+  return filtrados;
+}
+
+function obterValoresSelecionados(
+  valores: string[] | string | undefined,
+  valorTodos: string
+) {
+  const normalizados = normalizarFiltroMultiplo(valores, valorTodos);
+
+  if (normalizados.includes(valorTodos)) {
+    return [];
+  }
+
+  return normalizados;
+}
+
 function normalizarValorMonetario(valor: number | string | null | undefined) {
   if (typeof valor === 'number') {
     return Number.isFinite(valor) ? valor : 0;
@@ -291,32 +326,80 @@ function obterChaveOrcamento(linha: LinhaFunilBase) {
 
   return `${codigoClienteLoja}|${numeroOrcamento}`;
 }
+
 function montarIntervaloData(filtros: FiltrosFunilOrcamentos) {
-  if (filtros.periodo === FILTRO_TODOS_PERIODOS) {
+  const periodos = obterValoresSelecionados(
+    filtros.periodos,
+    FILTRO_TODOS_PERIODOS
+  );
+  const meses = obterValoresSelecionados(filtros.meses, FILTRO_TODOS_MESES);
+
+  if (periodos.length === 0) {
     return null;
   }
 
-  const ano = filtros.periodo;
-  const mes = filtros.mes;
+  const anosNumericos = periodos
+    .map(Number)
+    .filter((ano) => Number.isInteger(ano) && ano > 0);
 
-  if (mes && mes !== FILTRO_TODOS_MESES) {
-    const mesNumero = Number(mes);
-    const dataInicio = `${ano}-${mes}-01`;
-    const proximoAno = mesNumero === 12 ? Number(ano) + 1 : Number(ano);
-    const proximoMes = mesNumero === 12 ? '01' : String(mesNumero + 1).padStart(2, '0');
-
-    return {
-      inicio: dataInicio,
-      fim: `${proximoAno}-${proximoMes}-01`
-    };
+  if (anosNumericos.length === 0) {
+    return null;
   }
 
+  const mesesNumericos = meses
+    .map(Number)
+    .filter((mes) => Number.isInteger(mes) && mes >= 1 && mes <= 12);
+  const menorAno = Math.min(...anosNumericos);
+  const maiorAno = Math.max(...anosNumericos);
+  const menorMes = mesesNumericos.length > 0 ? Math.min(...mesesNumericos) : 1;
+  const maiorMes = mesesNumericos.length > 0 ? Math.max(...mesesNumericos) : 12;
+  const proximoAno = maiorMes === 12 ? maiorAno + 1 : maiorAno;
+  const proximoMes = maiorMes === 12 ? 1 : maiorMes + 1;
+
   return {
-    inicio: `${ano}-01-01`,
-    fim: `${Number(ano) + 1}-01-01`
+    inicio: `${menorAno}-${String(menorMes).padStart(2, '0')}-01`,
+    fim: `${proximoAno}-${String(proximoMes).padStart(2, '0')}-01`
   };
 }
 
+function filtroDataEstaAtivo(filtros: FiltrosFunilOrcamentos) {
+  return (
+    obterValoresSelecionados(filtros.periodos, FILTRO_TODOS_PERIODOS).length >
+      0 ||
+    obterValoresSelecionados(filtros.meses, FILTRO_TODOS_MESES).length > 0
+  );
+}
+
+function linhaDentroFiltrosData(
+  data: string | null | undefined,
+  filtros: FiltrosFunilOrcamentos
+) {
+  const periodos = obterValoresSelecionados(
+    filtros.periodos,
+    FILTRO_TODOS_PERIODOS
+  );
+  const meses = obterValoresSelecionados(filtros.meses, FILTRO_TODOS_MESES);
+
+  if (periodos.length === 0 && meses.length === 0) {
+    return true;
+  }
+
+  const partes = extrairPartesData(data);
+
+  if (!partes.ano) {
+    return false;
+  }
+
+  if (periodos.length > 0 && !periodos.includes(partes.ano)) {
+    return false;
+  }
+
+  if (meses.length > 0 && !meses.includes(partes.mes)) {
+    return false;
+  }
+
+  return true;
+}
 
 function descreverErroSupabase(err: unknown) {
   if (err instanceof Error) {
@@ -468,6 +551,7 @@ async function buscarLinhasPorStatus(
 ) {
   const campoData = DATA_REFERENCIA_STATUS[status] as string;
   const intervalo = montarIntervaloData(filtros);
+  const filtroDataAtivo = filtroDataEstaAtivo(filtros);
 
   const buscarPorCampoData = (campo: string, exigirData = true) =>
     buscarTodasAsPaginas<LinhaFunilBase>(() => {
@@ -486,18 +570,22 @@ async function buscarLinhasPorStatus(
         query = query.eq('origem_importacao', origemImportacao);
       }
 
-      if (intervalo) {
-        if (exigirData) {
-          query = query.not(campo, 'is', null);
-        }
+      if (filtroDataAtivo && exigirData) {
+        query = query.not(campo, 'is', null);
+      }
 
+      if (intervalo) {
         query = query.gte(campo, intervalo.inicio).lt(campo, intervalo.fim);
       }
 
       return query;
     });
 
-  return buscarPorCampoData(campoData);
+  const linhas = await buscarPorCampoData(campoData);
+
+  return linhas.filter((linha) =>
+    linhaDentroFiltrosData(linha[campoData as CampoDataFunil], filtros)
+  );
 }
 
 async function buscarLinhasTotalOrcado(
@@ -505,8 +593,9 @@ async function buscarLinhasTotalOrcado(
   origemImportacao: string | null
 ) {
   const intervalo = montarIntervaloData(filtros);
+  const filtroDataAtivo = filtroDataEstaAtivo(filtros);
 
-  return buscarTodasAsPaginas<LinhaFunilBase>(() => {
+  const linhas = await buscarTodasAsPaginas<LinhaFunilBase>(() => {
     let query = supabase
       .from('orcamentos_historico')
       .select(
@@ -522,29 +611,45 @@ async function buscarLinhasTotalOrcado(
       query = query.eq('origem_importacao', origemImportacao);
     }
 
+    if (filtroDataAtivo) {
+      query = query.not('data_emissao', 'is', null);
+    }
+
     if (intervalo) {
       query = query
-        .not('data_emissao', 'is', null)
         .gte('data_emissao', intervalo.inicio)
         .lt('data_emissao', intervalo.fim);
     }
 
     return query;
   });
+
+  return linhas.filter((linha) =>
+    linhaDentroFiltrosData(linha.data_emissao, filtros)
+  );
 }
 
 async function buscarMetasComerciais(filtros: FiltrosFunilOrcamentos) {
+  const periodos = obterValoresSelecionados(
+    filtros.periodos,
+    FILTRO_TODOS_PERIODOS
+  )
+    .map(Number)
+    .filter((ano) => Number.isInteger(ano) && ano > 0);
+  const meses = obterValoresSelecionados(filtros.meses, FILTRO_TODOS_MESES)
+    .map(Number)
+    .filter((mes) => Number.isInteger(mes) && mes >= 1 && mes <= 12);
   let query = supabase
     .from('metas_comerciais')
     .select('*')
     .order('vendedor_email', { ascending: true });
 
-  if (filtros.periodo !== FILTRO_TODOS_PERIODOS) {
-    query = query.eq('ano', Number(filtros.periodo));
+  if (periodos.length > 0) {
+    query = query.in('ano', periodos);
   }
 
-  if (filtros.mes !== FILTRO_TODOS_MESES) {
-    query = query.eq('mes', Number(filtros.mes));
+  if (meses.length > 0) {
+    query = query.in('mes', meses);
   }
 
   const { data, error } = await query;
@@ -1003,16 +1108,15 @@ export function useFunilOrcamentos(isAdmin: boolean, refreshKey = 0) {
         ...filtrosAtuais,
         area
       })),
-    setFiltroPeriodo: (periodo: string) =>
+    setFiltroPeriodos: (periodos: string[]) =>
       setFiltros((filtrosAtuais) => ({
         ...filtrosAtuais,
-        periodo,
-        mes: FILTRO_TODOS_MESES
+        periodos: normalizarFiltroMultiplo(periodos, FILTRO_TODOS_PERIODOS)
       })),
-    setFiltroMes: (mes: string) =>
+    setFiltroMeses: (meses: string[]) =>
       setFiltros((filtrosAtuais) => ({
         ...filtrosAtuais,
-        mes
+        meses: normalizarFiltroMultiplo(meses, FILTRO_TODOS_MESES)
       })),
     carregarFunilOrcamentos
   };
