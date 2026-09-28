@@ -1,11 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../../lib/supabase';
 import type { MetaComercial, Profile } from '../../../types';
 import Button from '../../ui/Button';
 
 type MetaFormulario = Record<string, string>;
+
+type MetasComerciaisAdminProps = {
+  refreshKey?: number;
+};
 
 const MESES = [
   { valor: 1, nome: 'Janeiro' },
@@ -51,7 +55,9 @@ function montarAnosDisponiveis() {
   return Array.from({ length: 7 }, (_, indice) => anoAtual - 2 + indice);
 }
 
-export default function MetasComerciaisAdmin() {
+export default function MetasComerciaisAdmin({
+  refreshKey = 0
+}: MetasComerciaisAdminProps) {
   const [vendedores, setVendedores] = useState<Profile[]>([]);
   const [metas, setMetas] = useState<MetaFormulario>({});
   const [ano, setAno] = useState(obterAnoAtual());
@@ -68,7 +74,7 @@ export default function MetasComerciaisAdmin() {
     }, 0);
   }, [metas, vendedores]);
 
-  async function carregarMetas() {
+  const carregarMetas = useCallback(async () => {
     setLoading(true);
     setMensagem(null);
 
@@ -118,7 +124,7 @@ export default function MetasComerciaisAdmin() {
     setVendedores(vendedoresCarregados);
     setMetas(metasPorEmail);
     setLoading(false);
-  }
+  }, [ano, mes]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -126,7 +132,7 @@ export default function MetasComerciaisAdmin() {
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [ano, mes]);
+  }, [carregarMetas, refreshKey]);
 
   async function salvarMetas() {
     const {

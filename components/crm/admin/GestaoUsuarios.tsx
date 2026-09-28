@@ -109,6 +109,7 @@ export default function GestaoUsuarios({
   const [novoUsuario, setNovoUsuario] = useState<NovoUsuario>(novoUsuarioInicial);
   const [mensagem, setMensagem] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [refreshMetasKey, setRefreshMetasKey] = useState(0);
 
   const segmentos = useMemo(() => {
     const segmentosBancoPadronizados = segmentosDisponiveis
@@ -240,6 +241,10 @@ export default function GestaoUsuarios({
     }
 
     setMensagem(resultado.message || 'Usuário excluído com sucesso.');
+    setUsuarios((usuariosAtuais) =>
+      usuariosAtuais.filter((item) => item.id !== usuario.id)
+    );
+    setRefreshMetasKey((valorAtual) => valorAtual + 1);
     setEditando(null);
     setSalvando(false);
     carregarUsuarios();
@@ -317,7 +322,7 @@ export default function GestaoUsuarios({
 
   return (
     <>
-      <MetasComerciaisAdmin />
+      <MetasComerciaisAdmin refreshKey={refreshMetasKey} />
 
       <RegrasCancelamentoOrcamentos segmentosDisponiveis={segmentos} />
 

@@ -9,6 +9,20 @@ function jsonError(error: string, status: number) {
   return NextResponse.json({ error }, { status });
 }
 
+function normalizarEmail(email?: string | null) {
+  return String(email || '').trim().toLowerCase();
+}
+
+function erroUsuarioAuthInexistente(error: { message?: string; status?: number }) {
+  const mensagem = String(error.message || '').toLowerCase();
+
+  return (
+    error.status === 404 ||
+    mensagem.includes('not found') ||
+    mensagem.includes('user not found')
+  );
+}
+
 export async function POST(request: Request) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -96,10 +110,26 @@ export async function POST(request: Request) {
       }
     }
 
+    const emailNormalizado = normalizarEmail(targetProfile.email);
+
+    if (emailNormalizado) {
+      const { error: metasDeleteError } = await supabaseAdmin
+        .from('metas_comerciais')
+        .delete()
+        .eq('vendedor_email', emailNormalizado);
+
+      if (metasDeleteError) {
+        return jsonError(
+          `Erro ao excluir metas comerciais do usuário: ${metasDeleteError.message}`,
+          400
+        );
+      }
+    }
+
     const { error: authDeleteError } =
       await supabaseAdmin.auth.admin.deleteUser(userId);
 
-    if (authDeleteError) {
+    if (authDeleteError && !erroUsuarioAuthInexistente(authDeleteError)) {
       return jsonError(authDeleteError.message, 400);
     }
 
@@ -110,6 +140,26 @@ export async function POST(request: Request) {
 
     if (profileDeleteError) {
       return jsonError(profileDeleteError.message, 400);
+    }
+
+    const { count: profilesRestantes, error: profileCheckError } =
+      await supabaseAdmin
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('id', userId);
+
+    if (profileCheckError) {
+      return jsonError(
+        `Usuário excluído, mas não foi possível validar profiles: ${profileCheckError.message}`,
+        400
+      );
+    }
+
+    if ((profilesRestantes || 0) > 0) {
+      return jsonError(
+        'A exclusão não removeu o usuário de profiles. Tente novamente.',
+        400
+      );
     }
 
     return NextResponse.json({
