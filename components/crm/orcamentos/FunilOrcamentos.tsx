@@ -124,8 +124,10 @@ function FiltroMultiplo({
   onChange: (valores: string[]) => void;
 }) {
   const [aberto, setAberto] = useState(false);
+  const [valoresPendentes, setValoresPendentes] = useState(valores);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const todosSelecionados = valores.includes(valorTodos) || valores.length === 0;
+  const todosSelecionados =
+    valoresPendentes.includes(valorTodos) || valoresPendentes.length === 0;
   const textoBotao = descreverFiltroMultiplo(
     valores,
     opcoes,
@@ -157,29 +159,44 @@ function FiltroMultiplo({
     };
   }, [aberto]);
 
+  function alternarMenu() {
+    if (!aberto) {
+      setValoresPendentes(valores);
+    }
+
+    setAberto((valorAtual) => !valorAtual);
+  }
+
   function alternarTodos() {
-    onChange([valorTodos]);
+    setValoresPendentes([valorTodos]);
   }
 
   function alternarValor(valor: string) {
     if (todosSelecionados) {
-      onChange([valor]);
+      setValoresPendentes([valor]);
       return;
     }
 
-    if (valores.includes(valor)) {
-      const proximaSelecao = valores.filter((item) => item !== valor);
+    if (valoresPendentes.includes(valor)) {
+      const proximaSelecao = valoresPendentes.filter((item) => item !== valor);
 
       if (proximaSelecao.length === 0) {
-        onChange(incluirTodos ? [valorTodos] : [valor]);
+        setValoresPendentes(incluirTodos ? [valorTodos] : [valor]);
         return;
       }
 
-      onChange(ordenarSelecaoPorOpcoes(proximaSelecao, opcoes));
+      setValoresPendentes(ordenarSelecaoPorOpcoes(proximaSelecao, opcoes));
       return;
     }
 
-    onChange(ordenarSelecaoPorOpcoes([...valores, valor], opcoes));
+    setValoresPendentes(
+      ordenarSelecaoPorOpcoes([...valoresPendentes, valor], opcoes)
+    );
+  }
+
+  function aplicarSelecao() {
+    onChange(valoresPendentes);
+    setAberto(false);
   }
 
   return (
@@ -192,8 +209,8 @@ function FiltroMultiplo({
         className="flex h-[30px] w-full items-center justify-between gap-2 rounded-lg border border-slate-300 bg-white px-[10px] py-0 text-left text-sm font-semibold text-slate-900 shadow-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
         aria-label={ariaLabel}
         aria-expanded={aberto}
-        aria-haspopup="listbox"
-        onClick={() => setAberto((valorAtual) => !valorAtual)}
+        aria-haspopup="dialog"
+        onClick={alternarMenu}
       >
         <span className="min-w-0 truncate">{textoBotao}</span>
         <span className="text-xs text-slate-500" aria-hidden="true">
@@ -203,36 +220,46 @@ function FiltroMultiplo({
 
       {aberto ? (
         <div
-          className="absolute right-0 z-30 mt-1 max-h-72 w-56 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg"
-          role="listbox"
+          className="absolute right-0 z-30 mt-1 w-56 overflow-hidden rounded-lg border border-slate-200 bg-white text-sm shadow-lg"
+          role="dialog"
           aria-label={ariaLabel}
         >
-          {incluirTodos ? (
-            <label className="flex cursor-pointer items-center gap-2 px-3 py-2 font-semibold text-slate-900 hover:bg-slate-50">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-600"
-                checked={todosSelecionados}
-                onChange={alternarTodos}
-              />
-              <span>{rotuloTodos}</span>
-            </label>
-          ) : null}
+          <div className="max-h-64 overflow-y-auto py-1">
+            {incluirTodos ? (
+              <label className="flex cursor-pointer items-center gap-2 px-3 py-2 font-semibold text-slate-900 hover:bg-slate-50">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-600"
+                  checked={todosSelecionados}
+                  onChange={alternarTodos}
+                />
+                <span>{rotuloTodos}</span>
+              </label>
+            ) : null}
 
-          {opcoes.map((opcao) => (
-            <label
-              key={opcao.valor}
-              className="flex cursor-pointer items-center gap-2 px-3 py-2 font-medium text-slate-800 hover:bg-slate-50"
-            >
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-600"
-                checked={!todosSelecionados && valores.includes(opcao.valor)}
-                onChange={() => alternarValor(opcao.valor)}
-              />
-              <span className="truncate">{opcao.rotulo}</span>
-            </label>
-          ))}
+            {opcoes.map((opcao) => (
+              <label
+                key={opcao.valor}
+                className="flex cursor-pointer items-center gap-2 px-3 py-2 font-medium text-slate-800 hover:bg-slate-50"
+              >
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-600"
+                  checked={
+                    !todosSelecionados && valoresPendentes.includes(opcao.valor)
+                  }
+                  onChange={() => alternarValor(opcao.valor)}
+                />
+                <span className="truncate">{opcao.rotulo}</span>
+              </label>
+            ))}
+          </div>
+
+          <div className="border-t border-slate-200 bg-white p-2">
+            <Button type="button" size="sm" fullWidth onClick={aplicarSelecao}>
+              Aplicar seleção
+            </Button>
+          </div>
         </div>
       ) : null}
     </div>
@@ -464,10 +491,12 @@ export default function FunilOrcamentos({
     valor: periodo,
     rotulo: periodo
   }));
-  const opcoesMeses = opcoes.meses.map((mes) => ({
-    valor: mes,
-    rotulo: FILTROS_FUNIL_ORCAMENTOS.MESES_NOMES[mes] || mes
-  }));
+  const opcoesMeses = [...opcoes.meses]
+    .sort((a, b) => Number(a) - Number(b))
+    .map((mes) => ({
+      valor: mes,
+      rotulo: FILTROS_FUNIL_ORCAMENTOS.MESES_NOMES[mes] || mes
+    }));
 
   if (loading && resumo.totalOrcamentos === 0) {
     return (
