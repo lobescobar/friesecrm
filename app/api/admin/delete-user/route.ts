@@ -112,52 +112,90 @@ export async function POST(request: Request) {
 
     const emailNormalizado = normalizarEmail(targetProfile.email);
 
-    if (emailNormalizado) {
-      const { error: metasDeleteError } = await supabaseAdmin
-        .from('metas_comerciais')
-        .delete()
-        .eq('vendedor_email', emailNormalizado);
-
-      if (metasDeleteError) {
-        return jsonError(
-          `Erro ao excluir metas comerciais do usuário: ${metasDeleteError.message}`,
-          400
-        );
-      }
-    }
-
     const { error: authDeleteError } =
       await supabaseAdmin.auth.admin.deleteUser(userId);
 
     if (authDeleteError && !erroUsuarioAuthInexistente(authDeleteError)) {
-      return jsonError(authDeleteError.message, 400);
-    }
+      console.error('[admin/delete-user] Falha ao excluir usuário do Auth.', {
+        userId,
+        error: authDeleteError.message
+      });
 
-    const { error: profileDeleteError } = await supabaseAdmin
-      .from('profiles')
-      .delete()
-      .eq('id', userId);
-
-    if (profileDeleteError) {
-      return jsonError(profileDeleteError.message, 400);
-    }
-
-    const { count: profilesRestantes, error: profileCheckError } =
-      await supabaseAdmin
-        .from('profiles')
-        .select('id', { count: 'exact', head: true })
-        .eq('id', userId);
-
-    if (profileCheckError) {
       return jsonError(
-        `Usuário excluído, mas não foi possível validar profiles: ${profileCheckError.message}`,
+        `Erro ao revogar o acesso do usuário: ${authDeleteError.message}`,
         400
       );
     }
 
-    if ((profilesRestantes || 0) > 0) {
+    const [profileDeleteResult, metasDeleteResult] = await Promise.all([
+      supabaseAdmin.from('profiles').delete().eq('id', userId),
+      emailNormalizado
+        ? supabaseAdmin
+            .from('metas_comerciais')
+            .delete()
+            .eq('vendedor_email', emailNormalizado)
+        : Promise.resolve({ error: null })
+    ]);
+
+    if (profileDeleteResult.error || metasDeleteResult.error) {
+      console.error('[admin/delete-user] Acesso revogado com limpeza incompleta.', {
+        userId,
+        profileError: profileDeleteResult.error?.message || null,
+        metasError: metasDeleteResult.error?.message || null
+      });
+
       return jsonError(
-        'A exclusão não removeu o usuário de profiles. Tente novamente.',
+        [
+          'O acesso foi revogado, mas a limpeza do cadastro ficou incompleta.',
+          profileDeleteResult.error
+            ? `Perfil: ${profileDeleteResult.error.message}`
+            : null,
+          metasDeleteResult.error
+            ? `Metas: ${metasDeleteResult.error.message}`
+            : null
+        ]
+          .filter(Boolean)
+          .join(' '),
+        400
+      );
+    }
+
+    const [profileCheckResult, metasCheckResult] = await Promise.all([
+      supabaseAdmin
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('id', userId),
+      emailNormalizado
+        ? supabaseAdmin
+            .from('metas_comerciais')
+            .select('id', { count: 'exact', head: true })
+            .eq('vendedor_email', emailNormalizado)
+        : Promise.resolve({ count: 0, error: null })
+    ]);
+
+    if (profileCheckResult.error || metasCheckResult.error) {
+      return jsonError(
+        [
+          'O acesso foi revogado, mas não foi possível validar toda a limpeza.',
+          profileCheckResult.error
+            ? `Perfil: ${profileCheckResult.error.message}`
+            : null,
+          metasCheckResult.error
+            ? `Metas: ${metasCheckResult.error.message}`
+            : null
+        ]
+          .filter(Boolean)
+          .join(' '),
+        400
+      );
+    }
+
+    const profilesRestantes = profileCheckResult.count || 0;
+    const metasRestantes = metasCheckResult.count || 0;
+
+    if (profilesRestantes > 0 || metasRestantes > 0) {
+      return jsonError(
+        'O acesso foi revogado, mas ainda existem dados do usuário a limpar. Tente novamente.',
         400
       );
     }
