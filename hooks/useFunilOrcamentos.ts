@@ -217,7 +217,7 @@ function montarChaveCache(
   ).join(',');
   const origem = montarSufixoCacheOrigemImportacao(origemImportacao);
 
-  return `funil-orcamentos:v21-metas-lote-atual-${origem}:${alcance}:area-${area}:periodos-${periodos}:meses-${meses}`;
+  return `funil-orcamentos:v22-metas-vigentes-por-segmento-${origem}:${alcance}:area-${area}:periodos-${periodos}:meses-${meses}`;
 }
 
 function montarChaveCacheOpcoes(
@@ -629,36 +629,63 @@ async function buscarLinhasTotalOrcado(
   );
 }
 
-async function buscarMetasComerciais(filtros: FiltrosFunilOrcamentos) {
-  const periodos = obterValoresSelecionados(
-    filtros.periodos,
-    FILTRO_TODOS_PERIODOS
-  )
-    .map(Number)
-    .filter((ano) => Number.isInteger(ano) && ano > 0);
-  const meses = obterValoresSelecionados(filtros.meses, FILTRO_TODOS_MESES)
-    .map(Number)
-    .filter((mes) => Number.isInteger(mes) && mes >= 1 && mes <= 12);
-  let query = supabase
+async function buscarMetasComerciais() {
+  const { data, error } = await supabase
     .from('metas_comerciais')
     .select('*')
+    .order('ano', { ascending: false })
+    .order('mes', { ascending: false })
     .order('vendedor_email', { ascending: true });
-
-  if (periodos.length > 0) {
-    query = query.in('ano', periodos);
-  }
-
-  if (meses.length > 0) {
-    query = query.in('mes', meses);
-  }
-
-  const { data, error } = await query;
 
   if (error) {
     throw error;
   }
 
   return (data || []) as MetaComercial[];
+}
+
+function selecionarMetasVigentes(metas: MetaComercial[]) {
+  const periodoMaisRecente = metas.reduce((maisRecente, meta) => {
+    const periodo = Number(meta.ano) * 100 + Number(meta.mes);
+
+    return Number.isFinite(periodo) && periodo > maisRecente
+      ? periodo
+      : maisRecente;
+  }, 0);
+
+  if (periodoMaisRecente === 0) {
+    return [];
+  }
+
+  return metas.filter(
+    (meta) => Number(meta.ano) * 100 + Number(meta.mes) === periodoMaisRecente
+  );
+}
+
+function normalizarSegmento(valor?: string | null) {
+  return normalizarTexto(valor)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function filtrarVendedoresPorArea(vendedores: Profile[], area: string) {
+  if (area === FILTRO_TODAS_AREAS) {
+    return vendedores;
+  }
+
+  const areaNormalizada = normalizarSegmento(area);
+
+  return vendedores.filter((vendedor) => {
+    const segmentos = vendedor.segmentos_permitidos || [];
+
+    return (
+      segmentos.length === 0 ||
+      segmentos.some(
+        (segmento) => normalizarSegmento(segmento) === areaNormalizada
+      )
+    );
+  });
 }
 
 async function buscarVendedoresFunil() {
@@ -796,12 +823,8 @@ function calcularResumoMetas(
 
   metas.forEach((meta) => {
     const email = normalizarTexto(meta.vendedor_email).toLowerCase();
-    const valorAtual = metaPorEmail.get(email) || 0;
 
-    metaPorEmail.set(
-      email,
-      valorAtual + normalizarValorMonetario(meta.valor_meta)
-    );
+    metaPorEmail.set(email, normalizarValorMonetario(meta.valor_meta));
   });
 
   const vendedoresResumo = vendedores.map((vendedor) => {
@@ -1015,7 +1038,7 @@ export function useFunilOrcamentos(isAdmin: boolean, refreshKey = 0) {
           buscarLinhasPorStatus('B', filtros, origemImportacao),
           buscarLinhasPorStatus('C', filtros, origemImportacao),
           buscarLinhasTotalOrcado(filtros, origemImportacao),
-          buscarMetasComerciais(filtros),
+          buscarMetasComerciais(),
           buscarVendedoresFunil()
         ]);
 
@@ -1040,11 +1063,16 @@ export function useFunilOrcamentos(isAdmin: boolean, refreshKey = 0) {
       );
       const realizadoGlobal =
         resumoBase.status.find((item) => item.status === 'B')?.valorTotal || 0;
+      const metasVigentes = selecionarMetasVigentes(metas);
+      const vendedoresDaArea = filtrarVendedoresPorArea(
+        vendedores,
+        filtros.area
+      );
       const resumo: FunilOrcamentosResumo = {
         ...resumoBase,
         metas: calcularResumoMetas(
-          metas,
-          vendedores,
+          metasVigentes,
+          vendedoresDaArea,
           fechados,
           estadosPorCliente,
           realizadoGlobal
