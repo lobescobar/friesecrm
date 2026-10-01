@@ -17,6 +17,9 @@ export type OrcamentoAbertoResumo = {
   codigo_cliente: string;
   codigo_cliente_loja: string;
   nome_cliente: string;
+  estado: string;
+  segmento: string;
+  vendedores_email: string[];
   numero_orcamento: string;
   data_emissao: string;
   quantidade_itens: number;
@@ -29,6 +32,14 @@ type ClienteRelacionado = {
   empresa?: string | null;
   razao_social?: string | null;
   nome_fantasia?: string | null;
+  estado?: string | null;
+  segmento?: string | null;
+};
+
+type VendedorAlcada = {
+  email: string;
+  segmentos_permitidos: string[] | null;
+  estados_permitidos: string[] | null;
 };
 
 type LinhaOrcamentoHistorico = {
@@ -69,7 +80,7 @@ const TAMANHO_PAGINA_SUPABASE = 1000;
 //    B = Fechado
 //    C = Cancelado
 const CHAVE_CACHE_ORCAMENTOS_ABERTOS =
-  'orcamentos-abertos:v8-lote-atual';
+  'orcamentos-abertos:v9-vendedor-estado';
 
 function montarChaveCacheOrcamentosAbertos(origemImportacao: string | null) {
   return `${CHAVE_CACHE_ORCAMENTOS_ABERTOS}:${montarSufixoCacheOrigemImportacao(
@@ -104,8 +115,24 @@ function obterNomeCliente(linha: LinhaOrcamentoHistorico) {
   );
 }
 
+function obterCampoCliente(
+  linha: LinhaOrcamentoHistorico,
+  campo: 'estado' | 'segmento'
+) {
+  const cliente = obterClienteRelacionado(linha.clientes);
+
+  return normalizarTexto(cliente?.[campo]);
+}
+
 function normalizarTexto(valor?: string | null) {
   return String(valor || '').trim();
+}
+
+function normalizarChave(valor?: string | null) {
+  return normalizarTexto(valor)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 }
 
 function obterNumeroPrincipal(linha: LinhaOrcamentoHistorico) {
@@ -155,6 +182,9 @@ function removerCamposInternos(
     codigo_cliente: orcamento.codigo_cliente,
     codigo_cliente_loja: orcamento.codigo_cliente_loja,
     nome_cliente: orcamento.nome_cliente,
+    estado: orcamento.estado,
+    segmento: orcamento.segmento,
+    vendedores_email: orcamento.vendedores_email,
     numero_orcamento: orcamento.numero_orcamento,
     data_emissao: orcamento.data_emissao,
     quantidade_itens: orcamento.quantidade_itens
@@ -185,6 +215,9 @@ function agruparEFiltrarOrcamentosAbertos(
         codigo_cliente: obterCodigoCliente(linha),
         codigo_cliente_loja: codigoClienteLoja,
         nome_cliente: obterNomeCliente(linha),
+        estado: obterCampoCliente(linha, 'estado').toUpperCase(),
+        segmento: obterCampoCliente(linha, 'segmento'),
+        vendedores_email: [],
         numero_orcamento: numeroOrcamento,
         data_emissao: dataEmissao,
         quantidade_itens: 1,
@@ -195,6 +228,10 @@ function agruparEFiltrarOrcamentosAbertos(
 
     mapa.set(chave, {
       ...existente,
+      estado:
+        existente.estado || obterCampoCliente(linha, 'estado').toUpperCase(),
+      segmento:
+        existente.segmento || obterCampoCliente(linha, 'segmento'),
       data_emissao:
         dataEmissao > existente.data_emissao
           ? dataEmissao
@@ -241,7 +278,7 @@ async function buscarTodasLinhasOrcamentosHistorico(
     let query = supabase
       .from('orcamentos_historico')
       .select(
-        'id, cliente_id, codigo_cliente, codigo_cliente_loja, numero_orcamento, numero_it_completo, data_emissao, status, clientes(id, empresa, razao_social, nome_fantasia)'
+        'id, cliente_id, codigo_cliente, codigo_cliente_loja, numero_orcamento, numero_it_completo, data_emissao, status, clientes(id, empresa, razao_social, nome_fantasia, estado, segmento)'
       )
       .in('status', ['A', 'B', 'C'])
       .gte('data_emissao', dataLimite);
@@ -273,16 +310,66 @@ async function buscarTodasLinhasOrcamentosHistorico(
   return linhas;
 }
 
+async function buscarVendedoresAlcada() {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('email,segmentos_permitidos,estados_permitidos')
+    .eq('role', 'vendedor')
+    .order('email', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data || []) as VendedorAlcada[];
+}
+
+function vendedorAtendeOrcamento(
+  vendedor: VendedorAlcada,
+  orcamento: OrcamentoAbertoResumo
+) {
+  const estado = normalizarChave(orcamento.estado);
+  const segmento = normalizarChave(orcamento.segmento);
+  const estados = (vendedor.estados_permitidos || []).map(normalizarChave);
+  const segmentos = (vendedor.segmentos_permitidos || []).map(normalizarChave);
+
+  if (!estado) {
+    return false;
+  }
+
+  const atendeEstado = estados.length === 0 || estados.includes(estado);
+  const atendeSegmento =
+    segmentos.length === 0 || (segmento !== '' && segmentos.includes(segmento));
+
+  return atendeEstado && atendeSegmento;
+}
+
+function atribuirVendedores(
+  orcamentos: OrcamentoAbertoResumo[],
+  vendedores: VendedorAlcada[]
+) {
+  return orcamentos.map((orcamento) => ({
+    ...orcamento,
+    vendedores_email: vendedores
+      .filter((vendedor) => vendedorAtendeOrcamento(vendedor, orcamento))
+      .map((vendedor) => normalizarTexto(vendedor.email).toLowerCase())
+      .filter(Boolean)
+  }));
+}
+
 async function carregarOrcamentosAbertosDaBase(
   origemImportacao: string | null
 ) {
   const dataLimite = calcularDataLimiteHistoricoOrcamentos();
-  const linhas = await buscarTodasLinhasOrcamentosHistorico(
-    dataLimite,
-    origemImportacao
-  );
+  const [linhas, vendedores] = await Promise.all([
+    buscarTodasLinhasOrcamentosHistorico(dataLimite, origemImportacao),
+    buscarVendedoresAlcada()
+  ]);
 
-  return agruparEFiltrarOrcamentosAbertos(linhas);
+  return atribuirVendedores(
+    agruparEFiltrarOrcamentosAbertos(linhas),
+    vendedores
+  );
 }
 
 function obterMensagemErro(error: unknown) {

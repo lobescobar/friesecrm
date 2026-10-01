@@ -40,6 +40,10 @@ type OrdenacaoOrcamentos = {
   direcao: DirecaoOrdenacao;
 };
 
+const FILTRO_TODOS = 'todos';
+const FILTRO_SEM_ESTADO = 'sem-estado';
+const FILTRO_SEM_VENDEDOR = 'sem-vendedor';
+
 function obterListaOrcamentos(
   retorno: RetornoUseOrcamentosAbertosCompat
 ): OrcamentoAbertoResumo[] {
@@ -229,6 +233,8 @@ export default function AlertaOrcamentosAbertos({
     campo: 'orcamento',
     direcao: 'desc'
   });
+  const [filtroVendedor, setFiltroVendedor] = useState(FILTRO_TODOS);
+  const [filtroEstado, setFiltroEstado] = useState(FILTRO_TODOS);
 
   const retornoHook =
     useOrcamentosAbertos(refreshKey) as RetornoUseOrcamentosAbertosCompat;
@@ -238,8 +244,57 @@ export default function AlertaOrcamentosAbertos({
     [retornoHook]
   );
 
+  const vendedoresDisponiveis = useMemo(() => {
+    return Array.from(
+      new Set(
+        orcamentos.flatMap((orcamento) => orcamento.vendedores_email || [])
+      )
+    ).sort((a, b) =>
+      a.localeCompare(b, 'pt-BR', { sensitivity: 'base' })
+    );
+  }, [orcamentos]);
+
+  const estadosDisponiveis = useMemo(() => {
+    return Array.from(
+      new Set(orcamentos.map((orcamento) => orcamento.estado).filter(Boolean))
+    ).sort((a, b) =>
+      a.localeCompare(b, 'pt-BR', { sensitivity: 'base' })
+    );
+  }, [orcamentos]);
+
+  const possuiOrcamentoSemVendedor = useMemo(
+    () =>
+      orcamentos.some(
+        (orcamento) => (orcamento.vendedores_email || []).length === 0
+      ),
+    [orcamentos]
+  );
+
+  const possuiOrcamentoSemEstado = useMemo(
+    () => orcamentos.some((orcamento) => !orcamento.estado),
+    [orcamentos]
+  );
+
+  const orcamentosFiltrados = useMemo(() => {
+    return orcamentos.filter((orcamento) => {
+      const vendedores = orcamento.vendedores_email || [];
+      const atendeVendedor =
+        filtroVendedor === FILTRO_TODOS ||
+        (filtroVendedor === FILTRO_SEM_VENDEDOR
+          ? vendedores.length === 0
+          : vendedores.includes(filtroVendedor));
+      const atendeEstado =
+        filtroEstado === FILTRO_TODOS ||
+        (filtroEstado === FILTRO_SEM_ESTADO
+          ? !orcamento.estado
+          : orcamento.estado === filtroEstado);
+
+      return atendeVendedor && atendeEstado;
+    });
+  }, [filtroEstado, filtroVendedor, orcamentos]);
+
   const orcamentosOrdenados = useMemo(() => {
-    return [...orcamentos].sort((primeiro, segundo) => {
+    return [...orcamentosFiltrados].sort((primeiro, segundo) => {
       const resultado = compararOrcamentosPorCampo(
         primeiro,
         segundo,
@@ -255,7 +310,7 @@ export default function AlertaOrcamentosAbertos({
 
       return compararOrcamentosPorCampo(primeiro, segundo, 'orcamento') * -1;
     });
-  }, [orcamentos, ordenacao]);
+  }, [orcamentosFiltrados, ordenacao]);
 
   const total = useMemo(
     () => obterTotalOrcamentos(retornoHook, orcamentos),
@@ -352,13 +407,59 @@ export default function AlertaOrcamentosAbertos({
 
       {listaAberta ? (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 bg-slate-50 px-4 py-3">
-            <h3 className="text-sm font-bold text-slate-900">
-              Orçamentos em aberto
-            </h3>
-            <p className="text-xs text-slate-500">
-              Clique em um orçamento para abrir o histórico do cliente.
-            </p>
+          <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">
+                Orçamentos em aberto
+              </h3>
+              <p className="text-xs text-slate-500">
+                Exibindo {orcamentosFiltrados.length} de {total} orçamento(s).
+              </p>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="block min-w-48">
+                <span className="mb-1 block text-[11px] font-bold uppercase text-slate-500">
+                  Vendedor
+                </span>
+                <select
+                  value={filtroVendedor}
+                  onChange={(event) => setFiltroVendedor(event.target.value)}
+                  className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                >
+                  <option value={FILTRO_TODOS}>Todos os vendedores</option>
+                  {vendedoresDisponiveis.map((vendedor) => (
+                    <option key={vendedor} value={vendedor}>
+                      {vendedor}
+                    </option>
+                  ))}
+                  {possuiOrcamentoSemVendedor ? (
+                    <option value={FILTRO_SEM_VENDEDOR}>Não atribuído</option>
+                  ) : null}
+                </select>
+              </label>
+
+              <label className="block min-w-36">
+                <span className="mb-1 block text-[11px] font-bold uppercase text-slate-500">
+                  Estado
+                </span>
+                <select
+                  value={filtroEstado}
+                  onChange={(event) => setFiltroEstado(event.target.value)}
+                  className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                >
+                  <option value={FILTRO_TODOS}>Todos os estados</option>
+                  {estadosDisponiveis.map((estado) => (
+                    <option key={estado} value={estado}>
+                      {estado}
+                    </option>
+                  ))}
+                  {possuiOrcamentoSemEstado ? (
+                    <option value={FILTRO_SEM_ESTADO}>Sem estado</option>
+                  ) : null}
+                </select>
+              </label>
+            </div>
           </div>
 
           <div className="max-h-[420px] overflow-auto">
@@ -400,6 +501,12 @@ export default function AlertaOrcamentosAbertos({
                     }
                   >
                     {botaoOrdenacao('emissao', 'Emissão')}
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold">
+                    Estado
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold">
+                    Vendedor
                   </th>
                   <th className="px-4 py-3 text-right font-semibold">
                     Ação
@@ -454,6 +561,15 @@ export default function AlertaOrcamentosAbertos({
                         {dataEmissao}
                       </td>
 
+                      <td className="px-4 py-3 font-semibold text-slate-700">
+                        {orcamento.estado || '-'}
+                      </td>
+
+                      <td className="px-4 py-3 text-slate-700">
+                        {(orcamento.vendedores_email || []).join(', ') ||
+                          'Não atribuído'}
+                      </td>
+
                       <td className="px-4 py-3 text-right">
                         <Button
                           type="button"
@@ -466,6 +582,17 @@ export default function AlertaOrcamentosAbertos({
                     </tr>
                   );
                 })}
+
+                {orcamentosOrdenados.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-4 py-8 text-center text-sm text-slate-500"
+                    >
+                      Nenhum orçamento corresponde aos filtros selecionados.
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>
