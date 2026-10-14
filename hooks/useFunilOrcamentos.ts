@@ -188,10 +188,10 @@ function calcularAnoCorrente() {
   return String(new Date().getFullYear());
 }
 
-function montarFiltrosIniciais(isAdmin: boolean): FiltrosFunilOrcamentos {
+function montarFiltrosIniciais(): FiltrosFunilOrcamentos {
   return {
     area: FILTRO_TODAS_AREAS,
-    periodos: [isAdmin ? FILTRO_TODOS_PERIODOS : calcularAnoCorrente()],
+    periodos: [calcularAnoCorrente()],
     meses: [FILTRO_TODOS_MESES]
   };
 }
@@ -217,7 +217,7 @@ function montarChaveCache(
   ).join(',');
   const origem = montarSufixoCacheOrigemImportacao(origemImportacao);
 
-  return `funil-orcamentos:v22-metas-vigentes-por-segmento-${origem}:${alcance}:area-${area}:periodos-${periodos}:meses-${meses}`;
+  return `funil-orcamentos:v23-historico-por-periodo-${origem}:${alcance}:area-${area}:periodos-${periodos}:meses-${meses}`;
 }
 
 function montarChaveCacheOpcoes(
@@ -227,7 +227,7 @@ function montarChaveCacheOpcoes(
   const alcance = isAdmin ? 'admin-todos' : `vendedor-${calcularAnoCorrente()}`;
   const origem = montarSufixoCacheOrigemImportacao(origemImportacao);
 
-  return `funil-orcamentos:opcoes:v3-lote-atual-${origem}:${alcance}`;
+  return `funil-orcamentos:opcoes:v4-historico-completo-${origem}:${alcance}`;
 }
 
 function extrairPartesData(data?: string | null) {
@@ -288,6 +288,25 @@ function obterValoresSelecionados(
   }
 
   return normalizados;
+}
+
+function obterOrigemConsultaPorPeriodo(
+  filtros: FiltrosFunilOrcamentos,
+  origemImportacaoAtual: string | null
+) {
+  const periodos = obterValoresSelecionados(
+    filtros.periodos,
+    FILTRO_TODOS_PERIODOS
+  );
+
+  if (
+    periodos.length === 1 &&
+    periodos[0] === calcularAnoCorrente()
+  ) {
+    return origemImportacaoAtual;
+  }
+
+  return null;
 }
 
 function normalizarValorMonetario(valor: number | string | null | undefined) {
@@ -492,26 +511,17 @@ type LinhaOpcoesFunil = {
   data_cancelamento?: string | null;
 };
 
-async function buscarOpcoesFunilOrcamentos(
-  isAdmin: boolean,
-  origemImportacao: string | null
-) {
+async function buscarOpcoesFunilOrcamentos(isAdmin: boolean) {
   const linhas: LinhaOpcoesFunil[] = [];
 
   for (const status of STATUS_ORDEM) {
     const campoData = DATA_REFERENCIA_STATUS[status];
 
     const linhasStatus = await buscarTodasAsPaginas<LinhaOpcoesFunil>(() => {
-      let query = supabase
+      return supabase
         .from('orcamentos_historico')
         .select(`id, status, ramo, ${campoData}`)
         .eq('status', status);
-
-      if (origemImportacao) {
-        query = query.eq('origem_importacao', origemImportacao);
-      }
-
-      return query;
     });
 
     linhas.push(...linhasStatus);
@@ -929,7 +939,7 @@ function calcularResumo(
 
 export function useFunilOrcamentos(isAdmin: boolean, refreshKey = 0) {
   const [filtros, setFiltros] = useState<FiltrosFunilOrcamentos>(() =>
-    montarFiltrosIniciais(isAdmin)
+    montarFiltrosIniciais()
   );
 
 
@@ -971,11 +981,16 @@ export function useFunilOrcamentos(isAdmin: boolean, refreshKey = 0) {
     }));
 
     try {
-      const origemImportacao = await buscarOrigemImportacaoOrcamentosAtual();
-      const cacheKey = montarChaveCache(isAdmin, filtros, origemImportacao);
+      const origemImportacaoAtual =
+        await buscarOrigemImportacaoOrcamentosAtual();
+      const origemConsulta = obterOrigemConsultaPorPeriodo(
+        filtros,
+        origemImportacaoAtual
+      );
+      const cacheKey = montarChaveCache(isAdmin, filtros, origemConsulta);
       const cacheOpcoesKey = montarChaveCacheOpcoes(
         isAdmin,
-        origemImportacao
+        origemImportacaoAtual
       );
       const cache = lerCacheSessao<CacheFunilOrcamentos>(
         cacheKey,
@@ -1021,7 +1036,7 @@ export function useFunilOrcamentos(isAdmin: boolean, refreshKey = 0) {
       const promessaOpcoes =
         opcoesEmCache
           ? Promise.resolve(opcoesEmCache)
-          : buscarOpcoesFunilOrcamentos(isAdmin, origemImportacao);
+          : buscarOpcoesFunilOrcamentos(isAdmin);
 
       const [
         opcoes,
@@ -1034,10 +1049,10 @@ export function useFunilOrcamentos(isAdmin: boolean, refreshKey = 0) {
       ] =
         await Promise.all([
           promessaOpcoes,
-          buscarLinhasPorStatus('A', filtros, origemImportacao),
-          buscarLinhasPorStatus('B', filtros, origemImportacao),
-          buscarLinhasPorStatus('C', filtros, origemImportacao),
-          buscarLinhasTotalOrcado(filtros, origemImportacao),
+          buscarLinhasPorStatus('A', filtros, origemConsulta),
+          buscarLinhasPorStatus('B', filtros, origemConsulta),
+          buscarLinhasPorStatus('C', filtros, origemConsulta),
+          buscarLinhasTotalOrcado(filtros, origemConsulta),
           buscarMetasComerciais(),
           buscarVendedoresFunil()
         ]);
