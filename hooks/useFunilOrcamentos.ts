@@ -217,7 +217,7 @@ function montarChaveCache(
   ).join(',');
   const origem = montarSufixoCacheOrigemImportacao(origemImportacao);
 
-  return `funil-orcamentos:v23-historico-por-periodo-${origem}:${alcance}:area-${area}:periodos-${periodos}:meses-${meses}`;
+  return `funil-orcamentos:v24-meta-mensal-acumulada-${origem}:${alcance}:area-${area}:periodos-${periodos}:meses-${meses}`;
 }
 
 function montarChaveCacheOpcoes(
@@ -307,6 +307,26 @@ function obterOrigemConsultaPorPeriodo(
   }
 
   return null;
+}
+
+function calcularQuantidadeMesesSelecionados(
+  filtros: FiltrosFunilOrcamentos,
+  opcoes: OpcoesFunilOrcamentos
+) {
+  const periodosSelecionados = obterValoresSelecionados(
+    filtros.periodos,
+    FILTRO_TODOS_PERIODOS
+  );
+  const mesesSelecionados = obterValoresSelecionados(
+    filtros.meses,
+    FILTRO_TODOS_MESES
+  );
+  const quantidadeAnos =
+    periodosSelecionados.length || Math.max(opcoes.periodos.length, 1);
+  const quantidadeMesesPorAno =
+    mesesSelecionados.length || Object.keys(MESES_NOMES).length;
+
+  return quantidadeAnos * quantidadeMesesPorAno;
 }
 
 function normalizarValorMonetario(valor: number | string | null | undefined) {
@@ -827,14 +847,15 @@ function calcularResumoMetas(
   vendedores: Profile[],
   linhasFechadas: LinhaFunilBase[],
   estadosPorCliente: Map<string, string>,
-  realizadoGlobal: number
+  realizadoGlobal: number,
+  quantidadeMeses: number
 ): FunilMetasResumo {
-  const metaPorEmail = new Map<string, number>();
+  const metaMensalPorEmail = new Map<string, number>();
 
   metas.forEach((meta) => {
     const email = normalizarTexto(meta.vendedor_email).toLowerCase();
 
-    metaPorEmail.set(email, normalizarValorMonetario(meta.valor_meta));
+    metaMensalPorEmail.set(email, normalizarValorMonetario(meta.valor_meta));
   });
 
   const vendedoresResumo = vendedores.map((vendedor) => {
@@ -843,7 +864,8 @@ function calcularResumoMetas(
       .map((estado) => normalizarTexto(estado).toUpperCase())
       .filter(Boolean);
     const todosEstados = estados.length === 0;
-    const meta = metaPorEmail.get(vendedorEmail) || 0;
+    const meta =
+      (metaMensalPorEmail.get(vendedorEmail) || 0) * quantidadeMeses;
     let realizado = 0;
 
     linhasFechadas.forEach((linha) => {
@@ -1090,7 +1112,8 @@ export function useFunilOrcamentos(isAdmin: boolean, refreshKey = 0) {
           vendedoresDaArea,
           fechados,
           estadosPorCliente,
-          realizadoGlobal
+          realizadoGlobal,
+          calcularQuantidadeMesesSelecionados(filtros, opcoes)
         )
       };
 
