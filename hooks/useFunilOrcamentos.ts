@@ -38,6 +38,7 @@ export type FunilOrcamentosResumo = {
 
 export type FunilMetaVendedor = {
   vendedorEmail: string;
+  segmentos: string[];
   estados: string[];
   meta: number;
   realizado: number;
@@ -50,6 +51,7 @@ export type FunilOrcamentoFechadoVendedor = {
   chave: string;
   numeroOrcamento: string;
   cliente: string;
+  segmento: string;
   estado: string;
   dataFechamento: string;
   valor: number;
@@ -239,7 +241,7 @@ function montarChaveCache(
   ).join(',');
   const origem = montarSufixoCacheOrigemImportacao(origemImportacao);
 
-  return `funil-orcamentos:v25-detalhes-vendedor-${origem}:${alcance}:area-${area}:periodos-${periodos}:meses-${meses}`;
+  return `funil-orcamentos:v26-segmento-e-estado-${origem}:${alcance}:area-${area}:periodos-${periodos}:meses-${meses}`;
 }
 
 function montarChaveCacheOpcoes(
@@ -610,7 +612,7 @@ async function buscarLinhasPorStatus(
       let query = supabase
         .from('orcamentos_historico')
         .select(
-          `id, cliente_id, codigo_cliente_loja, numero_orcamento, numero_it_completo, status, valor_total, ${campo}`
+          `id, cliente_id, codigo_cliente_loja, numero_orcamento, numero_it_completo, status, ramo, valor_total, ${campo}`
         )
         .eq('status', status);
 
@@ -715,10 +717,12 @@ function selecionarMetasVigentes(metas: MetaComercial[]) {
 }
 
 function normalizarSegmento(valor?: string | null) {
-  return normalizarTexto(valor)
+  const segmento = normalizarTexto(valor)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
+
+  return segmento === 'corrugados' ? 'corrugado' : segmento;
 }
 
 function filtrarVendedoresPorArea(vendedores: Profile[], area: string) {
@@ -886,9 +890,13 @@ function calcularResumoMetas(
 
   const vendedoresResumo = vendedores.map((vendedor) => {
     const vendedorEmail = normalizarTexto(vendedor.email).toLowerCase();
+    const segmentos = (vendedor.segmentos_permitidos || [])
+      .map((segmento) => normalizarSegmento(segmento))
+      .filter(Boolean);
     const estados = (vendedor.estados_permitidos || [])
       .map((estado) => normalizarTexto(estado).toUpperCase())
       .filter(Boolean);
+    const todosSegmentos = segmentos.length === 0;
     const todosEstados = estados.length === 0;
     const meta =
       (metaMensalPorEmail.get(vendedorEmail) || 0) * quantidadeMeses;
@@ -902,9 +910,13 @@ function calcularResumoMetas(
       const cliente = linha.cliente_id
         ? clientesPorId.get(linha.cliente_id)
         : undefined;
+      const segmentoOrcamento = normalizarSegmento(linha.ramo);
       const estadoCliente = cliente?.estado || '';
+      const atendeSegmento =
+        todosSegmentos || segmentos.includes(segmentoOrcamento);
+      const atendeEstado = todosEstados || estados.includes(estadoCliente);
 
-      if (todosEstados || estados.includes(estadoCliente)) {
+      if (atendeSegmento && atendeEstado) {
         const valor = normalizarValorMonetario(linha.valor_total);
         const chave = obterChaveOrcamento(linha) || linha.id;
         const orcamentoExistente = orcamentosPorChave.get(chave);
@@ -920,6 +932,7 @@ function calcularResumoMetas(
           chave,
           numeroOrcamento: obterNumeroPrincipal(linha) || '-',
           cliente: cliente?.nome || 'Cliente não identificado',
+          segmento: normalizarTexto(linha.ramo) || '-',
           estado: estadoCliente || '-',
           dataFechamento: normalizarTexto(linha.data_fechamento),
           valor
@@ -937,6 +950,7 @@ function calcularResumoMetas(
 
     return {
       vendedorEmail: vendedor.email,
+      segmentos: vendedor.segmentos_permitidos || [],
       estados,
       meta,
       realizado,

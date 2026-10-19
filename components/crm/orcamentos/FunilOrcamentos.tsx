@@ -431,7 +431,9 @@ function LinhaMetaVendedor({
               {item.vendedorEmail}
             </span>
             <span className="mt-1 block text-[11px] font-medium text-slate-500">
-              UF: {item.estados.length ? item.estados.join(', ') : 'Todos'}
+              Seg.:{' '}
+              {item.segmentos.length ? item.segmentos.join(', ') : 'Todos'} · UF:{' '}
+              {item.estados.length ? item.estados.join(', ') : 'Todos'}
             </span>
           </span>
         </button>
@@ -557,7 +559,7 @@ function MetasPorVendedor({ metas }: { metas: FunilMetasResumo }) {
 
           {vendedorDetalhado.orcamentosFechados.length > 0 ? (
             <div className="max-h-80 overflow-auto border-t border-slate-200 bg-white">
-              <table className="w-full min-w-[720px] text-sm">
+              <table className="w-full min-w-[820px] text-sm">
                 <caption className="sr-only">
                   Orçamentos fechados de {vendedorDetalhado.vendedorEmail} no
                   período filtrado.
@@ -569,6 +571,9 @@ function MetasPorVendedor({ metas }: { metas: FunilMetasResumo }) {
                     </th>
                     <th scope="col" className="px-4 py-2 text-left font-bold">
                       Cliente
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-left font-bold">
+                      Segmento
                     </th>
                     <th scope="col" className="px-4 py-2 text-left font-bold">
                       UF
@@ -591,6 +596,9 @@ function MetasPorVendedor({ metas }: { metas: FunilMetasResumo }) {
                         {orcamento.cliente}
                       </td>
                       <td className="px-4 py-3 text-slate-700">
+                        {orcamento.segmento}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
                         {orcamento.estado}
                       </td>
                       <td className="px-4 py-3 text-slate-700">
@@ -605,7 +613,7 @@ function MetasPorVendedor({ metas }: { metas: FunilMetasResumo }) {
                 <tfoot className="sticky bottom-0 border-t border-slate-200 bg-slate-50">
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={5}
                       className="px-4 py-2 text-right text-xs font-bold uppercase text-slate-500"
                     >
                       Total realizado
