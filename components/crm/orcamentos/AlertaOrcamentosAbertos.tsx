@@ -42,6 +42,7 @@ type OrdenacaoOrcamentos = {
 
 const FILTRO_TODOS = 'todos';
 const FILTRO_SEM_ESTADO = 'sem-estado';
+const FILTRO_SEM_SEGMENTO = 'sem-segmento';
 const FILTRO_SEM_VENDEDOR = 'sem-vendedor';
 
 function obterListaOrcamentos(
@@ -235,6 +236,8 @@ export default function AlertaOrcamentosAbertos({
   });
   const [filtroVendedor, setFiltroVendedor] = useState(FILTRO_TODOS);
   const [filtroEstado, setFiltroEstado] = useState(FILTRO_TODOS);
+  const [filtroSegmento, setFiltroSegmento] = useState(FILTRO_TODOS);
+  const [buscaNumeroOrcamento, setBuscaNumeroOrcamento] = useState('');
 
   const retornoHook =
     useOrcamentosAbertos(refreshKey) as RetornoUseOrcamentosAbertosCompat;
@@ -262,6 +265,16 @@ export default function AlertaOrcamentosAbertos({
     );
   }, [orcamentos]);
 
+  const segmentosDisponiveis = useMemo(() => {
+    return Array.from(
+      new Set(
+        orcamentos.map((orcamento) => orcamento.segmento).filter(Boolean)
+      )
+    ).sort((a, b) =>
+      a.localeCompare(b, 'pt-BR', { sensitivity: 'base' })
+    );
+  }, [orcamentos]);
+
   const possuiOrcamentoSemVendedor = useMemo(
     () =>
       orcamentos.some(
@@ -275,9 +288,21 @@ export default function AlertaOrcamentosAbertos({
     [orcamentos]
   );
 
+  const possuiOrcamentoSemSegmento = useMemo(
+    () => orcamentos.some((orcamento) => !orcamento.segmento),
+    [orcamentos]
+  );
+
   const orcamentosFiltrados = useMemo(() => {
+    const numeroBuscado = buscaNumeroOrcamento.trim().toLocaleLowerCase('pt-BR');
+
     return orcamentos.filter((orcamento) => {
       const vendedores = orcamento.vendedores_email || [];
+      const atendeNumero =
+        !numeroBuscado ||
+        orcamento.numero_orcamento
+          .toLocaleLowerCase('pt-BR')
+          .includes(numeroBuscado);
       const atendeVendedor =
         filtroVendedor === FILTRO_TODOS ||
         (filtroVendedor === FILTRO_SEM_VENDEDOR
@@ -288,10 +313,21 @@ export default function AlertaOrcamentosAbertos({
         (filtroEstado === FILTRO_SEM_ESTADO
           ? !orcamento.estado
           : orcamento.estado === filtroEstado);
+      const atendeSegmento =
+        filtroSegmento === FILTRO_TODOS ||
+        (filtroSegmento === FILTRO_SEM_SEGMENTO
+          ? !orcamento.segmento
+          : orcamento.segmento === filtroSegmento);
 
-      return atendeVendedor && atendeEstado;
+      return atendeNumero && atendeVendedor && atendeEstado && atendeSegmento;
     });
-  }, [filtroEstado, filtroVendedor, orcamentos]);
+  }, [
+    buscaNumeroOrcamento,
+    filtroEstado,
+    filtroSegmento,
+    filtroVendedor,
+    orcamentos
+  ]);
 
   const orcamentosOrdenados = useMemo(() => {
     return [...orcamentosFiltrados].sort((primeiro, segundo) => {
@@ -417,7 +453,45 @@ export default function AlertaOrcamentosAbertos({
               </p>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <label className="block min-w-40">
+                <span className="mb-1 block text-[11px] font-bold uppercase text-slate-500">
+                  Orçamento
+                </span>
+                <input
+                  type="search"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={buscaNumeroOrcamento}
+                  onChange={(event) =>
+                    setBuscaNumeroOrcamento(event.target.value)
+                  }
+                  placeholder="Buscar número"
+                  className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none placeholder:font-normal placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                />
+              </label>
+
+              <label className="block min-w-44">
+                <span className="mb-1 block text-[11px] font-bold uppercase text-slate-500">
+                  Segmento
+                </span>
+                <select
+                  value={filtroSegmento}
+                  onChange={(event) => setFiltroSegmento(event.target.value)}
+                  className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                >
+                  <option value={FILTRO_TODOS}>Todos os segmentos</option>
+                  {segmentosDisponiveis.map((segmento) => (
+                    <option key={segmento} value={segmento}>
+                      {segmento}
+                    </option>
+                  ))}
+                  {possuiOrcamentoSemSegmento ? (
+                    <option value={FILTRO_SEM_SEGMENTO}>Sem segmento</option>
+                  ) : null}
+                </select>
+              </label>
+
               <label className="block min-w-48">
                 <span className="mb-1 block text-[11px] font-bold uppercase text-slate-500">
                   Vendedor
