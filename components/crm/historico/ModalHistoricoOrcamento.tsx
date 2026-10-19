@@ -182,9 +182,9 @@ export default function ModalHistoricoOrcamento({
             </label>
 
             <label className="block text-sm font-semibold text-slate-700">
-              Lembrete
+              Lembrete (data e hora)
               <input
-                type="date"
+                type="datetime-local"
                 value={formulario.data_retorno}
                 onChange={(event) =>
                   onFormularioChange({
@@ -266,7 +266,7 @@ export default function ModalHistoricoOrcamento({
                             Lembrete
                           </p>
                           <p className="font-medium text-slate-700">
-                            {formatarData(interacao.data_retorno)}
+                            {formatarDataHora(interacao.data_retorno)}
                           </p>
                         </div>
                       ) : null}

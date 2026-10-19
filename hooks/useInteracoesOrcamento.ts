@@ -73,10 +73,33 @@ export function useInteracoesOrcamento({
       if (!item) return false;
 
       const observacao = formulario.observacao.trim();
+      const proximoPasso = formulario.proximo_passo.trim();
+      const dataRetorno = formulario.data_retorno
+        ? new Date(formulario.data_retorno)
+        : null;
 
       if (observacao.length < 3) {
         setErroInteracao(
           'Informe uma observação com pelo menos 3 caracteres para salvar o histórico.'
+        );
+        return false;
+      }
+
+      if (dataRetorno && !proximoPasso) {
+        setErroInteracao(
+          'Informe a ação necessária para programar o lembrete.'
+        );
+        return false;
+      }
+
+      if (dataRetorno && Number.isNaN(dataRetorno.getTime())) {
+        setErroInteracao('Informe uma data e hora válidas para o lembrete.');
+        return false;
+      }
+
+      if (dataRetorno && dataRetorno.getTime() <= Date.now() + 60 * 60 * 1000) {
+        setErroInteracao(
+          'Programe o lembrete com pelo menos uma hora de antecedência.'
         );
         return false;
       }
@@ -91,9 +114,9 @@ export function useInteracoesOrcamento({
           cliente_id: clienteId,
           numero_orcamento: item.numero_orcamento,
           observacao,
-          proximo_passo: formulario.proximo_passo.trim() || null,
-          data_retorno: formulario.data_retorno || null,
-          responsavel_email: usuarioEmail || null,
+          proximo_passo: proximoPasso || null,
+          data_retorno: dataRetorno?.toISOString() || null,
+          responsavel_email: null,
           criado_por: usuarioId || null,
           criado_por_email: usuarioEmail || null
         });

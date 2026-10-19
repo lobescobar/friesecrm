@@ -6,9 +6,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const FUSO_HORARIO = 'America/Sao_Paulo';
-const UM_DIA_MS = 24 * 60 * 60 * 1000;
-
-type TipoLembrete = 'previo' | 'data';
+const JANELA_ENVIO_MS = 61 * 60 * 1000;
 
 type OrcamentoInteracaoLembrete = {
   id: string;
@@ -17,10 +15,18 @@ type OrcamentoInteracaoLembrete = {
   observacao: string;
   proximo_passo: string | null;
   data_retorno: string | null;
-  responsavel_email: string | null;
-  criado_por_email: string | null;
-  lembrete_previo_enviado_em: string | null;
-  lembrete_data_enviado_em: string | null;
+};
+
+type ClienteCarteira = {
+  id: string;
+  estado: string | null;
+  segmento: string | null;
+};
+
+type VendedorAlcada = {
+  email: string;
+  estados_permitidos: string[] | null;
+  segmentos_permitidos: string[] | null;
 };
 
 function criarSupabaseServico() {
@@ -40,62 +46,102 @@ function criarSupabaseServico() {
 }
 
 function validarCron(request: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET?.trim();
+  const segredosValidos = [
+    process.env.CRON_SECRET,
+    process.env.REMINDER_DISPATCH_SECRET
+  ]
+    .map((segredo) => segredo?.trim())
+    .filter((segredo): segredo is string => Boolean(segredo));
 
-  if (!cronSecret) {
+  if (segredosValidos.length === 0) {
     return NextResponse.json(
-      { error: 'CRON_SECRET não configurado.' },
+      { error: 'Segredo do agendador não configurado.' },
       { status: 500 }
     );
   }
 
-  if (request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+  const autorizacao = request.headers.get('authorization');
+
+  if (!segredosValidos.some((segredo) => autorizacao === `Bearer ${segredo}`)) {
     return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
   }
 
   return null;
 }
 
-function obterDataSaoPaulo(offsetDias = 0) {
-  const partes = new Intl.DateTimeFormat('en-CA', {
-    timeZone: FUSO_HORARIO,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).formatToParts(new Date());
-
-  const ano = Number(partes.find((parte) => parte.type === 'year')?.value);
-  const mes = Number(partes.find((parte) => parte.type === 'month')?.value);
-  const dia = Number(partes.find((parte) => parte.type === 'day')?.value);
-
-  return new Date(Date.UTC(ano, mes - 1, dia) + offsetDias * UM_DIA_MS)
-    .toISOString()
-    .slice(0, 10);
-}
-
-function formatarDataBrasileira(dataIso: string) {
-  const [ano, mes, dia] = dataIso.split('-');
-
-  if (!ano || !mes || !dia) {
-    return dataIso;
-  }
-
-  return `${dia}/${mes}/${ano}`;
+function normalizarChave(valor?: string | null) {
+  return String(valor || '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 }
 
 function validarEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function montarCorpoEmail(
-  interacao: OrcamentoInteracaoLembrete,
-  dataLimite: string
+function formatarDataHoraBrasileira(dataIso: string) {
+  const data = new Date(dataIso);
+
+  if (Number.isNaN(data.getTime())) {
+    return dataIso;
+  }
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: FUSO_HORARIO,
+    dateStyle: 'short',
+    timeStyle: 'short'
+  }).format(data);
+}
+
+function vendedorAtendeCliente(
+  vendedor: VendedorAlcada,
+  cliente: ClienteCarteira
 ) {
+  const estado = normalizarChave(cliente.estado);
+  const segmento = normalizarChave(cliente.segmento);
+  const estados = (vendedor.estados_permitidos || []).map(normalizarChave);
+  const segmentos = (vendedor.segmentos_permitidos || []).map(normalizarChave);
+
+  if (!estado) {
+    return false;
+  }
+
+  const atendeEstado = estados.length === 0 || estados.includes(estado);
+  const atendeSegmento =
+    segmentos.length === 0 || (segmento !== '' && segmentos.includes(segmento));
+
+  return atendeEstado && atendeSegmento;
+}
+
+function escolherVendedorResponsavel(
+  cliente: ClienteCarteira,
+  vendedores: VendedorAlcada[]
+) {
+  return vendedores
+    .filter((vendedor) => vendedorAtendeCliente(vendedor, cliente))
+    .map((vendedor) => ({
+      vendedor,
+      especificidade:
+        (vendedor.estados_permitidos?.length ? 1 : 0) +
+        (vendedor.segmentos_permitidos?.length ? 2 : 0)
+    }))
+    .sort(
+      (a, b) =>
+        b.especificidade - a.especificidade ||
+        a.vendedor.email.localeCompare(b.vendedor.email, 'pt-BR', {
+          sensitivity: 'base'
+        })
+    )[0]?.vendedor;
+}
+
+function montarCorpoEmail(interacao: OrcamentoInteracaoLembrete) {
   return [
     'Ação pendente',
     '',
     `Orçamento: ${interacao.numero_orcamento}`,
-    `Data limite: ${formatarDataBrasileira(dataLimite)}`,
+    `Data limite: ${formatarDataHoraBrasileira(interacao.data_retorno || '')}`,
     '',
     'Registro referente:',
     interacao.observacao,
@@ -114,107 +160,113 @@ export async function GET(request: NextRequest) {
     return erroAutorizacao;
   }
 
-  const hoje = obterDataSaoPaulo();
-  const amanha = obterDataSaoPaulo(1);
   const supabase = criarSupabaseServico();
+  const agora = new Date();
+  const ate = new Date(agora.getTime() + JANELA_ENVIO_MS);
+  const agoraIso = agora.toISOString();
 
-  const { data, error } = await supabase
-    .from('orcamentos_interacoes')
-    .select(
-      [
-        'id',
-        'cliente_id',
-        'numero_orcamento',
-        'observacao',
-        'proximo_passo',
-        'data_retorno',
-        'responsavel_email',
-        'criado_por_email',
-        'lembrete_previo_enviado_em',
-        'lembrete_data_enviado_em'
-      ].join(', ')
-    )
-    .not('data_retorno', 'is', null)
-    .not('proximo_passo', 'is', null)
-    .in('data_retorno', [hoje, amanha]);
+  const { data, error } = await supabase.rpc('crm_claim_lembretes_acoes', {
+    p_agora: agoraIso,
+    p_ate: ate.toISOString(),
+    p_limite: 100
+  });
 
   if (error) {
-    console.error('Erro ao consultar lembretes de ações pendentes:', error);
+    console.error('Erro ao reservar lembretes de ações pendentes:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const interacoes = (data || []) as unknown as OrcamentoInteracaoLembrete[];
+  const interacoes = (data || []) as OrcamentoInteracaoLembrete[];
+  const clienteIds = [...new Set(interacoes.map((item) => item.cliente_id))];
 
-  const eventos = interacoes.flatMap(
-    (interacao) => {
-      const eventosInteracao: Array<{
-        interacao: OrcamentoInteracaoLembrete;
-        tipo: TipoLembrete;
-      }> = [];
+  const [resultadoClientes, resultadoVendedores] = await Promise.all([
+    clienteIds.length
+      ? supabase
+          .from('clientes')
+          .select('id,estado,segmento')
+          .in('id', clienteIds)
+      : Promise.resolve({ data: [], error: null }),
+    supabase
+      .from('profiles')
+      .select('email,estados_permitidos,segmentos_permitidos')
+      .eq('role', 'vendedor')
+      .order('email', { ascending: true })
+  ]);
 
-      if (
-        interacao.data_retorno === amanha &&
-        !interacao.lembrete_previo_enviado_em
-      ) {
-        eventosInteracao.push({ interacao, tipo: 'previo' });
-      }
+  if (resultadoClientes.error || resultadoVendedores.error) {
+    const erroConsulta = resultadoClientes.error || resultadoVendedores.error;
 
-      if (
-        interacao.data_retorno === hoje &&
-        !interacao.lembrete_data_enviado_em
-      ) {
-        eventosInteracao.push({ interacao, tipo: 'data' });
-      }
+    await Promise.all(
+      interacoes.map((interacao) =>
+        supabase
+          .from('orcamentos_interacoes')
+          .update({ lembrete_processando_em: null })
+          .eq('id', interacao.id)
+          .eq('lembrete_processando_em', agoraIso)
+      )
+    );
 
-      return eventosInteracao;
-    }
+    console.error('Erro ao resolver vendedores dos lembretes:', erroConsulta);
+    return NextResponse.json(
+      { error: erroConsulta?.message || 'Erro ao resolver vendedores.' },
+      { status: 500 }
+    );
+  }
+
+  const clientes = new Map(
+    ((resultadoClientes.data || []) as ClienteCarteira[]).map((cliente) => [
+      cliente.id,
+      cliente
+    ])
   );
-
-  const enviados: Array<{
-    id: string;
-    numero_orcamento: string;
-    tipo: TipoLembrete;
-    destinatario: string;
-  }> = [];
+  const vendedores = (resultadoVendedores.data || []) as VendedorAlcada[];
+  const enviados: Array<{ id: string; numero_orcamento: string }> = [];
   const ignorados: Array<{ id: string; motivo: string }> = [];
   const erros: Array<{ id: string; mensagem: string }> = [];
 
-  for (const evento of eventos) {
-    const { interacao, tipo } = evento;
-    const destinatario =
-      interacao.responsavel_email?.trim() ||
-      interacao.criado_por_email?.trim() ||
-      '';
+  for (const interacao of interacoes) {
+    const cliente = clientes.get(interacao.cliente_id);
+    const vendedor = cliente
+      ? escolherVendedorResponsavel(cliente, vendedores)
+      : null;
+    const destinatario = vendedor?.email.trim().toLowerCase() || '';
     const acao = interacao.proximo_passo?.trim() || '';
     const dataLimite = interacao.data_retorno || '';
 
-    if (!validarEmail(destinatario)) {
-      ignorados.push({ id: interacao.id, motivo: 'responsavel_sem_email' });
-      continue;
-    }
+    if (!validarEmail(destinatario) || !acao || !dataLimite) {
+      const motivo = !cliente
+        ? 'cliente_nao_encontrado'
+        : !validarEmail(destinatario)
+          ? 'vendedor_responsavel_sem_email'
+          : 'acao_ou_data_ausente';
 
-    if (!acao || !dataLimite) {
-      ignorados.push({ id: interacao.id, motivo: 'acao_ou_data_ausente' });
+      await supabase
+        .from('orcamentos_interacoes')
+        .update({ lembrete_processando_em: null })
+        .eq('id', interacao.id)
+        .eq('lembrete_processando_em', agoraIso);
+
+      ignorados.push({ id: interacao.id, motivo });
       continue;
     }
 
     try {
       await enviarEmailMicrosoft365({
         destinatarios: [destinatario],
-        assunto: 'ação pendente',
-        corpo: montarCorpoEmail(interacao, dataLimite)
+        assunto: 'Ação pendente',
+        corpo: montarCorpoEmail(interacao)
       });
-
-      const campoControle =
-        tipo === 'previo'
-          ? 'lembrete_previo_enviado_em'
-          : 'lembrete_data_enviado_em';
 
       const { error: erroAtualizacao } = await supabase
         .from('orcamentos_interacoes')
-        .update({ [campoControle]: new Date().toISOString() })
+        .update({
+          responsavel_email: destinatario,
+          lembrete_processando_em: null,
+          lembrete_enviado_em: new Date().toISOString()
+        })
         .eq('id', interacao.id)
-        .is(campoControle, null);
+        .eq('lembrete_processando_em', agoraIso)
+        .is('lembrete_enviado_em', null);
 
       if (erroAtualizacao) {
         throw erroAtualizacao;
@@ -222,11 +274,16 @@ export async function GET(request: NextRequest) {
 
       enviados.push({
         id: interacao.id,
-        numero_orcamento: interacao.numero_orcamento,
-        tipo,
-        destinatario
+        numero_orcamento: interacao.numero_orcamento
       });
     } catch (erro) {
+      await supabase
+        .from('orcamentos_interacoes')
+        .update({ lembrete_processando_em: null })
+        .eq('id', interacao.id)
+        .eq('lembrete_processando_em', agoraIso)
+        .is('lembrete_enviado_em', null);
+
       const mensagem =
         erro instanceof Error ? erro.message : 'Erro inesperado no envio.';
 
@@ -237,8 +294,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     ok: erros.length === 0,
-    hoje,
-    amanha,
+    processados: interacoes.length,
     enviados,
     ignorados,
     erros
