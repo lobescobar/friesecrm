@@ -43,6 +43,16 @@ export type FunilMetaVendedor = {
   realizado: number;
   percentual: number;
   saldo: number;
+  orcamentosFechados: FunilOrcamentoFechadoVendedor[];
+};
+
+export type FunilOrcamentoFechadoVendedor = {
+  chave: string;
+  numeroOrcamento: string;
+  cliente: string;
+  estado: string;
+  dataFechamento: string;
+  valor: number;
 };
 
 export type FunilMetasResumo = {
@@ -79,7 +89,15 @@ type LinhaFunilBase = {
   data_cancelamento?: string | null;
 };
 
-type LinhaClienteEstado = Pick<Cliente, 'id' | 'estado'>;
+type LinhaClienteFunil = Pick<
+  Cliente,
+  'id' | 'empresa' | 'razao_social' | 'nome_fantasia' | 'estado'
+>;
+
+type ClienteFunil = {
+  nome: string;
+  estado: string;
+};
 
 type EstadoFunilOrcamentos = {
   resumo: FunilOrcamentosResumo;
@@ -221,7 +239,7 @@ function montarChaveCache(
   ).join(',');
   const origem = montarSufixoCacheOrigemImportacao(origemImportacao);
 
-  return `funil-orcamentos:v24-meta-mensal-acumulada-${origem}:${alcance}:area-${area}:periodos-${periodos}:meses-${meses}`;
+  return `funil-orcamentos:v25-detalhes-vendedor-${origem}:${alcance}:area-${area}:periodos-${periodos}:meses-${meses}`;
 }
 
 function montarChaveCacheOpcoes(
@@ -746,29 +764,33 @@ function dividirEmLotes<T>(itens: T[], tamanho: number) {
   return lotes;
 }
 
-async function buscarEstadosClientes(clienteIds: string[]) {
-  const estadosPorCliente = new Map<string, string>();
+async function buscarClientesFunil(clienteIds: string[]) {
+  const clientesPorId = new Map<string, ClienteFunil>();
   const idsUnicos = Array.from(new Set(clienteIds.filter(Boolean)));
 
   for (const lote of dividirEmLotes(idsUnicos, 500)) {
     const { data, error } = await supabase
       .from('clientes')
-      .select('id,estado')
+      .select('id,empresa,razao_social,nome_fantasia,estado')
       .in('id', lote);
 
     if (error) {
       throw error;
     }
 
-    ((data || []) as LinhaClienteEstado[]).forEach((cliente) => {
-      estadosPorCliente.set(
-        cliente.id,
-        normalizarTexto(cliente.estado).toUpperCase()
-      );
+    ((data || []) as LinhaClienteFunil[]).forEach((cliente) => {
+      clientesPorId.set(cliente.id, {
+        nome:
+          normalizarTexto(cliente.nome_fantasia) ||
+          normalizarTexto(cliente.razao_social) ||
+          normalizarTexto(cliente.empresa) ||
+          'Cliente não identificado',
+        estado: normalizarTexto(cliente.estado).toUpperCase()
+      });
     });
   }
 
-  return estadosPorCliente;
+  return clientesPorId;
 }
 
 
@@ -850,7 +872,7 @@ function calcularResumoMetas(
   metas: MetaComercial[],
   vendedores: Profile[],
   linhasFechadas: LinhaFunilBase[],
-  estadosPorCliente: Map<string, string>,
+  clientesPorId: Map<string, ClienteFunil>,
   realizadoGlobal: number,
   quantidadeMeses: number
 ): FunilMetasResumo {
@@ -871,16 +893,47 @@ function calcularResumoMetas(
     const meta =
       (metaMensalPorEmail.get(vendedorEmail) || 0) * quantidadeMeses;
     let realizado = 0;
+    const orcamentosPorChave = new Map<
+      string,
+      FunilOrcamentoFechadoVendedor
+    >();
 
     linhasFechadas.forEach((linha) => {
-      const estadoCliente = linha.cliente_id
-        ? estadosPorCliente.get(linha.cliente_id) || ''
-        : '';
+      const cliente = linha.cliente_id
+        ? clientesPorId.get(linha.cliente_id)
+        : undefined;
+      const estadoCliente = cliente?.estado || '';
 
       if (todosEstados || estados.includes(estadoCliente)) {
-        realizado += normalizarValorMonetario(linha.valor_total);
+        const valor = normalizarValorMonetario(linha.valor_total);
+        const chave = obterChaveOrcamento(linha) || linha.id;
+        const orcamentoExistente = orcamentosPorChave.get(chave);
+
+        realizado += valor;
+
+        if (orcamentoExistente) {
+          orcamentoExistente.valor += valor;
+          return;
+        }
+
+        orcamentosPorChave.set(chave, {
+          chave,
+          numeroOrcamento: obterNumeroPrincipal(linha) || '-',
+          cliente: cliente?.nome || 'Cliente não identificado',
+          estado: estadoCliente || '-',
+          dataFechamento: normalizarTexto(linha.data_fechamento),
+          valor
+        });
       }
     });
+
+    const orcamentosFechados = Array.from(orcamentosPorChave.values()).sort(
+      (a, b) =>
+        b.dataFechamento.localeCompare(a.dataFechamento) ||
+        b.numeroOrcamento.localeCompare(a.numeroOrcamento, 'pt-BR', {
+          numeric: true
+        })
+    );
 
     return {
       vendedorEmail: vendedor.email,
@@ -888,7 +941,8 @@ function calcularResumoMetas(
       meta,
       realizado,
       percentual: calcularPercentualMeta(realizado, meta),
-      saldo: realizado - meta
+      saldo: realizado - meta,
+      orcamentosFechados
     };
   });
 
@@ -1083,7 +1137,7 @@ export function useFunilOrcamentos(isAdmin: boolean, refreshKey = 0) {
           buscarVendedoresFunil()
         ]);
 
-      const estadosPorCliente = await buscarEstadosClientes(
+      const clientesPorId = await buscarClientesFunil(
         fechados
           .map((linha) => linha.cliente_id)
           .filter((clienteId): clienteId is string => Boolean(clienteId))
@@ -1115,7 +1169,7 @@ export function useFunilOrcamentos(isAdmin: boolean, refreshKey = 0) {
           metasVigentes,
           vendedoresDaArea,
           fechados,
-          estadosPorCliente,
+          clientesPorId,
           realizadoGlobal,
           calcularQuantidadeMesesSelecionados(filtros, opcoes)
         )

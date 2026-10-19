@@ -66,6 +66,20 @@ function formatarPercentual(valor: number) {
   return `${formatarNumero(valor)}%`;
 }
 
+function formatarData(valor: string) {
+  if (!valor) {
+    return '-';
+  }
+
+  const dataIso = valor.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+  if (dataIso) {
+    return `${dataIso[3]}/${dataIso[2]}/${dataIso[1]}`;
+  }
+
+  return valor;
+}
+
 function classeSaldo(valor: number) {
   if (valor >= 0) {
     return 'text-green-700';
@@ -381,16 +395,46 @@ function FunilBarra({ item }: { item: FunilOrcamentoResumoStatus }) {
   );
 }
 
-function LinhaMetaVendedor({ item }: { item: FunilMetaVendedor }) {
+function LinhaMetaVendedor({
+  item,
+  selecionado,
+  onSelecionar
+}: {
+  item: FunilMetaVendedor;
+  selecionado: boolean;
+  onSelecionar: () => void;
+}) {
   const largura = Math.min(Math.max(item.percentual, item.realizado > 0 ? 4 : 0), 100);
 
   return (
-    <tr className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+    <tr
+      className={`border-b border-slate-100 last:border-0 ${
+        selecionado ? 'bg-blue-50' : 'hover:bg-slate-50'
+      }`}
+    >
       <td className="px-4 py-3">
-        <p className="font-bold text-slate-900">{item.vendedorEmail}</p>
-        <p className="mt-1 text-[11px] font-medium text-slate-500">
-          UF: {item.estados.length ? item.estados.join(', ') : 'Todos'}
-        </p>
+        <button
+          type="button"
+          className="flex w-full items-center gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+          aria-expanded={selecionado}
+          title="Exibir orçamentos fechados"
+          onClick={onSelecionar}
+        >
+          <span
+            className="w-3 shrink-0 text-sm font-bold text-slate-500"
+            aria-hidden="true"
+          >
+            {selecionado ? '⌄' : '›'}
+          </span>
+          <span className="min-w-0">
+            <span className="block font-bold text-slate-900">
+              {item.vendedorEmail}
+            </span>
+            <span className="mt-1 block text-[11px] font-medium text-slate-500">
+              UF: {item.estados.length ? item.estados.join(', ') : 'Todos'}
+            </span>
+          </span>
+        </button>
       </td>
       <td className="px-4 py-3 text-right font-semibold text-slate-700">
         {formatarMoeda(item.meta)}
@@ -422,6 +466,13 @@ function LinhaMetaVendedor({ item }: { item: FunilMetaVendedor }) {
 }
 
 function MetasPorVendedor({ metas }: { metas: FunilMetasResumo }) {
+  const [vendedorSelecionado, setVendedorSelecionado] = useState<string | null>(
+    null
+  );
+  const vendedorDetalhado = metas.vendedores.find(
+    (item) => item.vendedorEmail === vendedorSelecionado
+  );
+
   if (metas.vendedores.length === 0) {
     return (
       <p className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-500">
@@ -463,11 +514,116 @@ function MetasPorVendedor({ metas }: { metas: FunilMetasResumo }) {
           </thead>
           <tbody>
             {metas.vendedores.map((item) => (
-              <LinhaMetaVendedor key={item.vendedorEmail} item={item} />
+              <LinhaMetaVendedor
+                key={item.vendedorEmail}
+                item={item}
+                selecionado={item.vendedorEmail === vendedorSelecionado}
+                onSelecionar={() =>
+                  setVendedorSelecionado((emailAtual) =>
+                    emailAtual === item.vendedorEmail
+                      ? null
+                      : item.vendedorEmail
+                  )
+                }
+              />
             ))}
           </tbody>
         </table>
       </div>
+
+      {vendedorDetalhado ? (
+        <div className="border-t border-slate-200 bg-slate-50">
+          <div className="flex items-start justify-between gap-3 px-4 py-3">
+            <div>
+              <h4 className="text-sm font-extrabold text-slate-900">
+                Orçamentos fechados
+              </h4>
+              <p className="mt-1 text-xs font-medium text-slate-500">
+                {vendedorDetalhado.vendedorEmail} ·{' '}
+                {formatarNumero(vendedorDetalhado.orcamentosFechados.length)}{' '}
+                orçamento(s)
+              </p>
+            </div>
+            <button
+              type="button"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-lg text-slate-600 shadow-sm hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+              title="Fechar detalhamento"
+              aria-label="Fechar detalhamento dos orçamentos"
+              onClick={() => setVendedorSelecionado(null)}
+            >
+              ×
+            </button>
+          </div>
+
+          {vendedorDetalhado.orcamentosFechados.length > 0 ? (
+            <div className="max-h-80 overflow-auto border-t border-slate-200 bg-white">
+              <table className="w-full min-w-[720px] text-sm">
+                <caption className="sr-only">
+                  Orçamentos fechados de {vendedorDetalhado.vendedorEmail} no
+                  período filtrado.
+                </caption>
+                <thead className="sticky top-0 border-b border-slate-200 bg-white text-xs text-slate-500">
+                  <tr>
+                    <th scope="col" className="px-4 py-2 text-left font-bold">
+                      Orçamento
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-left font-bold">
+                      Cliente
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-left font-bold">
+                      UF
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-left font-bold">
+                      Fechamento
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-bold">
+                      Valor
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {vendedorDetalhado.orcamentosFechados.map((orcamento) => (
+                    <tr key={orcamento.chave} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 font-bold text-slate-900">
+                        {orcamento.numeroOrcamento}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {orcamento.cliente}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {orcamento.estado}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {formatarData(orcamento.dataFechamento)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold text-slate-900">
+                        {formatarMoeda(orcamento.valor)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="sticky bottom-0 border-t border-slate-200 bg-slate-50">
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="px-4 py-2 text-right text-xs font-bold uppercase text-slate-500"
+                    >
+                      Total realizado
+                    </td>
+                    <td className="px-4 py-2 text-right font-extrabold text-slate-900">
+                      {formatarMoeda(vendedorDetalhado.realizado)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : (
+            <p className="border-t border-slate-200 bg-white px-4 py-4 text-sm font-medium text-slate-500">
+              Nenhum orçamento fechado para este vendedor no período filtrado.
+            </p>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
