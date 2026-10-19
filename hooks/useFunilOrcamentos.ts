@@ -188,11 +188,15 @@ function calcularAnoCorrente() {
   return String(new Date().getFullYear());
 }
 
+function calcularMesCorrente() {
+  return String(new Date().getMonth() + 1).padStart(2, '0');
+}
+
 function montarFiltrosIniciais(): FiltrosFunilOrcamentos {
   return {
     area: FILTRO_TODAS_AREAS,
     periodos: [calcularAnoCorrente()],
-    meses: [FILTRO_TODOS_MESES]
+    meses: [calcularMesCorrente()]
   };
 }
 
