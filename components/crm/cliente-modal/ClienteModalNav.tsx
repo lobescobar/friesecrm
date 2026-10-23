@@ -34,7 +34,7 @@ const secoes: Array<{
   },
   {
     id: 'chamado-equipamentos',
-    label: 'Chamado Equipamentos',
+    label: 'Equipamentos',
     descricao: 'assistência'
   },
   {
