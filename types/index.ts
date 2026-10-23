@@ -33,6 +33,19 @@ export interface Contato {
   updated_at?: string | null;
 }
 
+export interface EquipamentoCliente {
+  id: string;
+  cliente_id: string;
+  modelo_maquina: string;
+  fabricante?: string | null;
+  codigo_maquina?: string | null;
+  matrizes_ano?: number | null;
+  capas_ano?: number | null;
+  historico?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
 export interface Ordenacao {
   coluna: keyof Cliente | 'cliente_nome';
   direcao: 'asc' | 'desc';
