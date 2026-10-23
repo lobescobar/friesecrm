@@ -6,6 +6,7 @@ import Button from '../../ui/Button';
 import Modal from '../../ui/Modal';
 import ContatosCliente from '../clientes/ContatosCliente';
 import HistoricoCliente from '../historico/HistoricoCliente';
+import ClienteChamadoEquipamentos from './ClienteChamadoEquipamentos';
 import ClienteDados from './ClienteDados';
 import ClienteModalNav, {
   ClienteModalSecao
@@ -199,6 +200,9 @@ export default function ClienteModal({
       );
     }
 
+    if (secaoAtiva === 'chamado-equipamentos') {
+      return <ClienteChamadoEquipamentos />;
+    }
 
     return (
       <ClienteObservacoes
