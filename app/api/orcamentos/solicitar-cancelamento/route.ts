@@ -322,26 +322,6 @@ export async function POST(request: NextRequest) {
 
     solicitacaoId = solicitacao.id;
 
-    const resultadoEnvio = await enviarEmailMicrosoft365({
-      destinatarios,
-      assunto,
-      corpo: corpoEmail
-    });
-
-    const { error: erroAtualizacao } = await supabase
-      .from('solicitacoes_cancelamento_orcamentos')
-      .update({
-        status_envio: 'enviado',
-        remetente: resultadoEnvio.remetente,
-        enviado_em: new Date().toISOString(),
-        erro_envio: null
-      })
-      .eq('id', solicitacaoId);
-
-    if (erroAtualizacao) {
-      console.error('E-mail enviado, mas auditoria não foi atualizada.', erroAtualizacao);
-    }
-
     await registrarHistoricoCancelamento(supabase, {
       clienteId,
       numeroOrcamento,
@@ -351,16 +331,81 @@ export async function POST(request: NextRequest) {
       motivo
     });
 
-    return NextResponse.json({
-      ok: true,
-      destinatarios: resultadoEnvio.destinatarios
-    });
+    try {
+      const resultadoEnvio = await enviarEmailMicrosoft365({
+        destinatarios,
+        assunto,
+        corpo: corpoEmail
+      });
+
+      const { error: erroAtualizacao } = await supabase
+        .from('solicitacoes_cancelamento_orcamentos')
+        .update({
+          status_envio: 'enviado',
+          remetente: resultadoEnvio.remetente,
+          enviado_em: new Date().toISOString(),
+          erro_envio: null
+        })
+        .eq('id', solicitacaoId);
+
+      if (erroAtualizacao) {
+        console.error(
+          'E-mail enviado, mas auditoria não foi atualizada.',
+          erroAtualizacao
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        emailEnviado: true,
+        destinatarios: resultadoEnvio.destinatarios
+      });
+    } catch (erroEmail) {
+      const detalheErro =
+        erroEmail instanceof Error
+          ? erroEmail.message
+          : 'Erro inesperado ao enviar e-mail.';
+
+      console.error(
+        'Solicitação registrada, mas o e-mail de cancelamento falhou:',
+        erroEmail
+      );
+
+      const { error: erroAuditoria } = await supabase
+        .from('solicitacoes_cancelamento_orcamentos')
+        .update({
+          status_envio: 'erro',
+          erro_envio: detalheErro.slice(0, 2000)
+        })
+        .eq('id', solicitacaoId);
+
+      if (erroAuditoria) {
+        console.error(
+          'Não foi possível registrar a falha do envio do e-mail.',
+          erroAuditoria
+        );
+      }
+
+      return NextResponse.json(
+        {
+          ok: true,
+          emailEnviado: false,
+          destinatarios,
+          aviso:
+            'A solicitação foi registrada no CRM, mas o e-mail de aviso não pôde ser enviado. A administração deve revisar o envio.'
+        },
+        { status: 202 }
+      );
+    }
   } catch (erro) {
-    const mensagem =
-      erro instanceof Error ? erro.message : 'Erro inesperado ao enviar e-mail.';
+    console.error('Erro ao registrar a solicitação de cancelamento:', erro);
 
-    console.error('Erro no envio da solicitação de cancelamento:', erro);
-
-    return NextResponse.json({ error: mensagem }, { status: 500 });
+    return NextResponse.json(
+      {
+        error:
+          'Não foi possível registrar a solicitação de cancelamento. Tente novamente.'
+      },
+      { status: 500 }
+    );
   }
 }

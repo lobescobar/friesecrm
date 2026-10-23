@@ -324,6 +324,8 @@ export default function HistoricoCliente({
       const resultado = (await resposta.json()) as {
         ok?: boolean;
         error?: string;
+        aviso?: string;
+        emailEnviado?: boolean;
         destinatarios?: string[];
       };
 
@@ -333,9 +335,16 @@ export default function HistoricoCliente({
         );
       }
 
-      setMensagemCancelamento(
-        `Solicitação de cancelamento do orçamento ${orcamentoCancelamento.numero_orcamento} enviada automaticamente para ${resultado.destinatarios?.join(', ') || emailCancelamento}.`
-      );
+      if (resultado.emailEnviado === false) {
+        setMensagemCancelamento(
+          resultado.aviso ||
+            `Solicitação de cancelamento do orçamento ${orcamentoCancelamento.numero_orcamento} registrada no CRM. O e-mail de aviso não pôde ser enviado.`
+        );
+      } else {
+        setMensagemCancelamento(
+          `Solicitação de cancelamento do orçamento ${orcamentoCancelamento.numero_orcamento} enviada automaticamente para ${resultado.destinatarios?.join(', ') || emailCancelamento}.`
+        );
+      }
       fecharSolicitacaoCancelamento();
       await carregarHistorico();
     } catch (erro) {
