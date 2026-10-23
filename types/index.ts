@@ -41,6 +41,11 @@ export interface EquipamentoCliente {
   codigo_maquina?: string | null;
   matrizes_ano?: number | null;
   capas_ano?: number | null;
+  data_ultima_compra?: string | null;
+  lembrete_em?: string | null;
+  lembrete_processando_em?: string | null;
+  lembrete_enviado_em?: string | null;
+  lembrete_responsavel_email?: string | null;
   historico?: string | null;
   created_at?: string | null;
   updated_at?: string | null;

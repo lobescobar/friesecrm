@@ -11,6 +11,8 @@ type FormularioEquipamento = {
   codigo_maquina: string;
   matrizes_ano: string;
   capas_ano: string;
+  data_ultima_compra: string;
+  lembrete_em: string;
   historico: string;
 };
 
@@ -27,6 +29,8 @@ const formularioVazio: FormularioEquipamento = {
   codigo_maquina: '',
   matrizes_ano: '',
   capas_ano: '',
+  data_ultima_compra: '',
+  lembrete_em: '',
   historico: ''
 };
 
@@ -126,6 +130,36 @@ function CamposEquipamento({
         </label>
       </div>
 
+      <label className="block" htmlFor={`${prefixo}-ultima-compra`}>
+        <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+          Data da última compra
+        </span>
+        <input
+          id={`${prefixo}-ultima-compra`}
+          type="date"
+          value={formulario.data_ultima_compra}
+          onChange={(event) =>
+            alterar('data_ultima_compra', event.target.value)
+          }
+          disabled={desabilitado}
+          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+        />
+      </label>
+
+      <label className="block" htmlFor={`${prefixo}-lembrete`}>
+        <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+          Lembrete
+        </span>
+        <input
+          id={`${prefixo}-lembrete`}
+          type="datetime-local"
+          value={formulario.lembrete_em}
+          onChange={(event) => alterar('lembrete_em', event.target.value)}
+          disabled={desabilitado}
+          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+        />
+      </label>
+
       <label className="block sm:col-span-2" htmlFor={`${prefixo}-historico`}>
         <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-400">
           Histórico
@@ -152,8 +186,29 @@ function montarFormulario(equipamento: EquipamentoCliente) {
     codigo_maquina: equipamento.codigo_maquina || '',
     matrizes_ano: equipamento.matrizes_ano?.toString() || '',
     capas_ano: equipamento.capas_ano?.toString() || '',
+    data_ultima_compra: equipamento.data_ultima_compra || '',
+    lembrete_em: converterIsoParaDataHoraLocal(equipamento.lembrete_em),
     historico: equipamento.historico || ''
   };
+}
+
+function converterIsoParaDataHoraLocal(valor?: string | null) {
+  if (!valor) return '';
+
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return '';
+
+  const partes = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  }).format(data);
+
+  return partes.replace(' ', 'T');
 }
 
 function obterQuantidade(valor: string) {
@@ -179,6 +234,13 @@ function validarFormulario(formulario: FormularioEquipamento) {
     }
   }
 
+  if (
+    formulario.lembrete_em &&
+    Number.isNaN(new Date(formulario.lembrete_em).getTime())
+  ) {
+    return 'Informe uma data e hora válidas para o lembrete.';
+  }
+
   return null;
 }
 
@@ -189,6 +251,10 @@ function montarDados(formulario: FormularioEquipamento) {
     codigo_maquina: formulario.codigo_maquina.trim() || null,
     matrizes_ano: obterQuantidade(formulario.matrizes_ano),
     capas_ano: obterQuantidade(formulario.capas_ano),
+    data_ultima_compra: formulario.data_ultima_compra || null,
+    lembrete_em: formulario.lembrete_em
+      ? new Date(formulario.lembrete_em).toISOString()
+      : null,
     historico: formulario.historico.trim() || null
   };
 }
@@ -197,6 +263,26 @@ function formatarQuantidade(valor?: number | null) {
   return valor === null || valor === undefined
     ? '-'
     : new Intl.NumberFormat('pt-BR').format(valor);
+}
+
+function formatarData(valor?: string | null) {
+  if (!valor) return '-';
+
+  const [ano, mes, dia] = valor.split('-');
+  return ano && mes && dia ? `${dia}/${mes}/${ano}` : valor;
+}
+
+function formatarDataHora(valor?: string | null) {
+  if (!valor) return '-';
+
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return valor;
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    dateStyle: 'short',
+    timeStyle: 'short'
+  }).format(data);
 }
 
 export default function ClienteEquipamentos({ clienteId }: { clienteId: string }) {
@@ -404,7 +490,7 @@ export default function ClienteEquipamentos({ clienteId }: { clienteId: string }
                       </div>
                     </div>
 
-                    <dl className="grid grid-cols-1 gap-3 rounded-xl bg-slate-50 p-3 text-sm sm:grid-cols-3">
+                    <dl className="grid grid-cols-1 gap-3 rounded-xl bg-slate-50 p-3 text-sm sm:grid-cols-2 lg:grid-cols-5">
                       <div>
                         <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
                           Cód. da máquina
@@ -427,6 +513,23 @@ export default function ClienteEquipamentos({ clienteId }: { clienteId: string }
                         </dt>
                         <dd className="mt-1 font-semibold text-slate-700">
                           {formatarQuantidade(equipamento.capas_ano)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                          Última compra
+                        </dt>
+                        <dd className="mt-1 font-semibold text-slate-700">
+                          {formatarData(equipamento.data_ultima_compra)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                          Lembrete
+                        </dt>
+                        <dd className="mt-1 font-semibold text-slate-700">
+                          {formatarDataHora(equipamento.lembrete_em)}
+                          {equipamento.lembrete_enviado_em ? ' · Enviado' : ''}
                         </dd>
                       </div>
                     </dl>

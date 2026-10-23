@@ -17,10 +17,24 @@ type OrcamentoInteracaoLembrete = {
   data_retorno: string | null;
 };
 
+type EquipamentoClienteLembrete = {
+  id: string;
+  cliente_id: string;
+  modelo_maquina: string;
+  fabricante: string | null;
+  codigo_maquina: string | null;
+  data_ultima_compra: string | null;
+  lembrete_em: string | null;
+  historico: string | null;
+};
+
 type ClienteCarteira = {
   id: string;
   estado: string | null;
   segmento: string | null;
+  nome_fantasia: string | null;
+  empresa: string | null;
+  razao_social: string | null;
 };
 
 type VendedorAlcada = {
@@ -95,6 +109,13 @@ function formatarDataHoraBrasileira(dataIso: string) {
   }).format(data);
 }
 
+function formatarDataBrasileira(dataIso?: string | null) {
+  if (!dataIso) return '-';
+
+  const [ano, mes, dia] = dataIso.split('-');
+  return ano && mes && dia ? `${dia}/${mes}/${ano}` : dataIso;
+}
+
 function vendedorAtendeCliente(
   vendedor: VendedorAlcada,
   cliente: ClienteCarteira
@@ -153,6 +174,37 @@ function montarCorpoEmail(interacao: OrcamentoInteracaoLembrete) {
   ].join('\n');
 }
 
+function montarCorpoEmailEquipamento(
+  equipamento: EquipamentoClienteLembrete,
+  cliente: ClienteCarteira
+) {
+  const nomeCliente =
+    cliente.nome_fantasia ||
+    cliente.empresa ||
+    cliente.razao_social ||
+    'Cliente não identificado';
+
+  return [
+    'Lembrete de equipamento',
+    '',
+    `Cliente: ${nomeCliente}`,
+    `Modelo da máquina: ${equipamento.modelo_maquina}`,
+    `Fabricante: ${equipamento.fabricante || '-'}`,
+    `Cód. da máquina: ${equipamento.codigo_maquina || '-'}`,
+    `Data da última compra: ${formatarDataBrasileira(
+      equipamento.data_ultima_compra
+    )}`,
+    `Data do lembrete: ${formatarDataHoraBrasileira(
+      equipamento.lembrete_em || ''
+    )}`,
+    '',
+    'Histórico:',
+    equipamento.historico?.trim() || '-',
+    '',
+    'Este é um lembrete automático do CRM Friese.'
+  ].join('\n');
+}
+
 export async function GET(request: NextRequest) {
   const erroAutorizacao = validarCron(request);
 
@@ -165,25 +217,62 @@ export async function GET(request: NextRequest) {
   const ate = new Date(agora.getTime() + JANELA_ENVIO_MS);
   const agoraIso = agora.toISOString();
 
-  const { data, error } = await supabase.rpc('crm_claim_lembretes_acoes', {
-    p_agora: agoraIso,
-    p_ate: ate.toISOString(),
-    p_limite: 100
-  });
+  const [resultadoInteracoes, resultadoEquipamentos] = await Promise.all([
+    supabase.rpc('crm_claim_lembretes_acoes', {
+      p_agora: agoraIso,
+      p_ate: ate.toISOString(),
+      p_limite: 100
+    }),
+    supabase.rpc('crm_claim_lembretes_equipamentos', {
+      p_agora: agoraIso,
+      p_limite: 100
+    })
+  ]);
 
-  if (error) {
-    console.error('Erro ao reservar lembretes de ações pendentes:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const interacoes = (resultadoInteracoes.data ||
+    []) as OrcamentoInteracaoLembrete[];
+  const equipamentos = (resultadoEquipamentos.data ||
+    []) as EquipamentoClienteLembrete[];
+
+  if (resultadoInteracoes.error || resultadoEquipamentos.error) {
+    await Promise.all([
+      ...interacoes.map((interacao) =>
+        supabase
+          .from('orcamentos_interacoes')
+          .update({ lembrete_processando_em: null })
+          .eq('id', interacao.id)
+          .eq('lembrete_processando_em', agoraIso)
+      ),
+      ...equipamentos.map((equipamento) =>
+        supabase
+          .from('equipamentos_clientes')
+          .update({ lembrete_processando_em: null })
+          .eq('id', equipamento.id)
+          .eq('lembrete_processando_em', agoraIso)
+      )
+    ]);
+
+    const erroReserva =
+      resultadoInteracoes.error || resultadoEquipamentos.error;
+    console.error('Erro ao reservar lembretes pendentes:', erroReserva);
+    return NextResponse.json(
+      { error: erroReserva?.message || 'Erro ao reservar lembretes.' },
+      { status: 500 }
+    );
   }
 
-  const interacoes = (data || []) as OrcamentoInteracaoLembrete[];
-  const clienteIds = [...new Set(interacoes.map((item) => item.cliente_id))];
+  const clienteIds = [
+    ...new Set([
+      ...interacoes.map((item) => item.cliente_id),
+      ...equipamentos.map((item) => item.cliente_id)
+    ])
+  ];
 
   const [resultadoClientes, resultadoVendedores] = await Promise.all([
     clienteIds.length
       ? supabase
           .from('clientes')
-          .select('id,estado,segmento')
+          .select('id,estado,segmento,nome_fantasia,empresa,razao_social')
           .in('id', clienteIds)
       : Promise.resolve({ data: [], error: null }),
     supabase
@@ -196,15 +285,22 @@ export async function GET(request: NextRequest) {
   if (resultadoClientes.error || resultadoVendedores.error) {
     const erroConsulta = resultadoClientes.error || resultadoVendedores.error;
 
-    await Promise.all(
-      interacoes.map((interacao) =>
+    await Promise.all([
+      ...interacoes.map((interacao) =>
         supabase
           .from('orcamentos_interacoes')
           .update({ lembrete_processando_em: null })
           .eq('id', interacao.id)
           .eq('lembrete_processando_em', agoraIso)
+      ),
+      ...equipamentos.map((equipamento) =>
+        supabase
+          .from('equipamentos_clientes')
+          .update({ lembrete_processando_em: null })
+          .eq('id', equipamento.id)
+          .eq('lembrete_processando_em', agoraIso)
       )
-    );
+    ]);
 
     console.error('Erro ao resolver vendedores dos lembretes:', erroConsulta);
     return NextResponse.json(
@@ -221,8 +317,11 @@ export async function GET(request: NextRequest) {
   );
   const vendedores = (resultadoVendedores.data || []) as VendedorAlcada[];
   const enviados: Array<{ id: string; numero_orcamento: string }> = [];
+  const equipamentosEnviados: Array<{ id: string; modelo_maquina: string }> = [];
   const ignorados: Array<{ id: string; motivo: string }> = [];
+  const equipamentosIgnorados: Array<{ id: string; motivo: string }> = [];
   const erros: Array<{ id: string; mensagem: string }> = [];
+  const errosEquipamentos: Array<{ id: string; mensagem: string }> = [];
 
   for (const interacao of interacoes) {
     const cliente = clientes.get(interacao.cliente_id);
@@ -292,11 +391,82 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  for (const equipamento of equipamentos) {
+    const cliente = clientes.get(equipamento.cliente_id);
+    const vendedor = cliente
+      ? escolherVendedorResponsavel(cliente, vendedores)
+      : null;
+    const destinatario = vendedor?.email.trim().toLowerCase() || '';
+
+    if (!cliente || !validarEmail(destinatario) || !equipamento.lembrete_em) {
+      const motivo = !cliente
+        ? 'cliente_nao_encontrado'
+        : !validarEmail(destinatario)
+          ? 'vendedor_responsavel_sem_email'
+          : 'data_lembrete_ausente';
+
+      await supabase
+        .from('equipamentos_clientes')
+        .update({ lembrete_processando_em: null })
+        .eq('id', equipamento.id)
+        .eq('lembrete_processando_em', agoraIso);
+
+      equipamentosIgnorados.push({ id: equipamento.id, motivo });
+      continue;
+    }
+
+    try {
+      await enviarEmailMicrosoft365({
+        destinatarios: [destinatario],
+        assunto: 'Lembrete de equipamento',
+        corpo: montarCorpoEmailEquipamento(equipamento, cliente)
+      });
+
+      const { error: erroAtualizacao } = await supabase
+        .from('equipamentos_clientes')
+        .update({
+          lembrete_responsavel_email: destinatario,
+          lembrete_processando_em: null,
+          lembrete_enviado_em: new Date().toISOString()
+        })
+        .eq('id', equipamento.id)
+        .eq('lembrete_processando_em', agoraIso)
+        .is('lembrete_enviado_em', null);
+
+      if (erroAtualizacao) {
+        throw erroAtualizacao;
+      }
+
+      equipamentosEnviados.push({
+        id: equipamento.id,
+        modelo_maquina: equipamento.modelo_maquina
+      });
+    } catch (erro) {
+      await supabase
+        .from('equipamentos_clientes')
+        .update({ lembrete_processando_em: null })
+        .eq('id', equipamento.id)
+        .eq('lembrete_processando_em', agoraIso)
+        .is('lembrete_enviado_em', null);
+
+      const mensagem =
+        erro instanceof Error ? erro.message : 'Erro inesperado no envio.';
+
+      console.error('Erro ao enviar lembrete de equipamento:', erro);
+      errosEquipamentos.push({ id: equipamento.id, mensagem });
+    }
+  }
+
   return NextResponse.json({
-    ok: erros.length === 0,
-    processados: interacoes.length,
+    ok: erros.length === 0 && errosEquipamentos.length === 0,
+    processados: interacoes.length + equipamentos.length,
+    processadosAcoes: interacoes.length,
+    processadosEquipamentos: equipamentos.length,
     enviados,
+    equipamentosEnviados,
     ignorados,
-    erros
+    equipamentosIgnorados,
+    erros,
+    errosEquipamentos
   });
 }
