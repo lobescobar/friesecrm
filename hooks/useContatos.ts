@@ -9,6 +9,26 @@ import {
 
 type NovoContato = Omit<Contato, 'id' | 'created_at' | 'updated_at'>;
 
+type ErroSupabase = {
+  code?: string;
+  message?: string;
+};
+
+function mensagemErroContato(
+  erro: ErroSupabase,
+  mensagemPadrao: string
+) {
+  if (erro.code === '42501' || erro.message?.includes('row-level security')) {
+    return 'Você não tem permissão para alterar os contatos deste cliente.';
+  }
+
+  if (erro.code === '23503') {
+    return 'Este cliente não está mais disponível para receber contatos.';
+  }
+
+  return mensagemPadrao;
+}
+
 function montarChaveCacheContatos(clienteId: string) {
   return `contatos-cliente:${clienteId}`;
 }
@@ -77,14 +97,26 @@ export function useContatos() {
   );
 
   const adicionarContato = async (novoContato: NovoContato) => {
+    setError(null);
+
     const { data, error: erroCriacao } = await supabase
       .from('contatos_clientes')
-      .insert([novoContato])
+      .insert([
+        {
+          ...novoContato,
+          endereco_padrao: novoContato.endereco_padrao ?? false
+        }
+      ])
       .select()
       .single();
 
     if (erroCriacao) {
-      setError(erroCriacao.message);
+      setError(
+        mensagemErroContato(
+          erroCriacao,
+          'Não foi possível adicionar o contato. Tente novamente.'
+        )
+      );
       return null;
     }
 
@@ -94,6 +126,8 @@ export function useContatos() {
   };
 
   const atualizarContato = async (id: string, dados: Partial<Contato>) => {
+    setError(null);
+
     const { data, error: erroAtualizacao } = await supabase
       .from('contatos_clientes')
       .update(dados)
@@ -102,7 +136,12 @@ export function useContatos() {
       .single();
 
     if (erroAtualizacao) {
-      setError(erroAtualizacao.message);
+      setError(
+        mensagemErroContato(
+          erroAtualizacao,
+          'Não foi possível atualizar o contato. Tente novamente.'
+        )
+      );
       return null;
     }
 
@@ -117,13 +156,20 @@ export function useContatos() {
   };
 
   const excluirContato = async (id: string) => {
+    setError(null);
+
     const { error: erroExclusao } = await supabase
       .from('contatos_clientes')
       .delete()
       .eq('id', id);
 
     if (erroExclusao) {
-      setError(erroExclusao.message);
+      setError(
+        mensagemErroContato(
+          erroExclusao,
+          'Não foi possível excluir o contato. Tente novamente.'
+        )
+      );
       return false;
     }
 

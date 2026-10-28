@@ -28,7 +28,7 @@ export interface Contato {
   telefone?: string | null;
   email?: string | null;
   endereco_visita?: string | null;
-  endereco_padrao?: boolean | null;
+  endereco_padrao?: boolean;
   created_at?: string | null;
   updated_at?: string | null;
 }

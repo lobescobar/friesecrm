@@ -98,8 +98,6 @@ export default function ContatosCliente({
       endereco_visita: novoContato.endereco_visita.trim() || undefined,
       endereco_padrao:
         contatos.length === 0 && Boolean(novoContato.endereco_visita.trim())
-          ? true
-          : undefined
     });
 
     setSalvando(false);
@@ -206,7 +204,7 @@ export default function ContatosCliente({
     }
   };
 
-  const textoMensagem = mensagem || erro;
+  const textoMensagem = erro || mensagem;
   const mensagemErro = mensagemEhErro(mensagem, erro);
   const contatosOrdenados = [...contatos].sort((a, b) => {
     if (a.endereco_padrao === b.endereco_padrao) {
