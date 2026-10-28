@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import Button from '../../ui/Button';
 import LoadingSpinner from '../../ui/LoadingSpinner';
 import {
@@ -467,12 +467,116 @@ function LinhaMetaVendedor({
   );
 }
 
+function DetalheOrcamentosVendedor({
+  vendedor,
+  onFechar
+}: {
+  vendedor: FunilMetaVendedor;
+  onFechar: () => void;
+}) {
+  return (
+    <div className="border-y border-slate-200 bg-slate-50">
+      <div className="flex items-start justify-between gap-3 px-4 py-3">
+        <div>
+          <h4 className="text-sm font-extrabold text-slate-900">
+            Orçamentos fechados
+          </h4>
+          <p className="mt-1 text-xs font-medium text-slate-500">
+            {vendedor.vendedorEmail} ·{' '}
+            {formatarNumero(vendedor.orcamentosFechados.length)} orçamento(s)
+          </p>
+        </div>
+        <button
+          type="button"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-lg text-slate-600 shadow-sm hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+          title="Fechar detalhamento"
+          aria-label="Fechar detalhamento dos orçamentos"
+          onClick={onFechar}
+        >
+          ×
+        </button>
+      </div>
+
+      {vendedor.orcamentosFechados.length > 0 ? (
+        <div className="max-h-80 overflow-auto border-t border-slate-200 bg-white">
+          <table className="w-full min-w-[820px] text-sm">
+            <caption className="sr-only">
+              Orçamentos fechados de {vendedor.vendedorEmail} no período
+              filtrado.
+            </caption>
+            <thead className="sticky top-0 border-b border-slate-200 bg-white text-xs text-slate-500">
+              <tr>
+                <th scope="col" className="px-4 py-2 text-left font-bold">
+                  Orçamento
+                </th>
+                <th scope="col" className="px-4 py-2 text-left font-bold">
+                  Cliente
+                </th>
+                <th scope="col" className="px-4 py-2 text-left font-bold">
+                  Segmento
+                </th>
+                <th scope="col" className="px-4 py-2 text-left font-bold">
+                  UF
+                </th>
+                <th scope="col" className="px-4 py-2 text-left font-bold">
+                  Fechamento
+                </th>
+                <th scope="col" className="px-4 py-2 text-right font-bold">
+                  Valor
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {vendedor.orcamentosFechados.map((orcamento) => (
+                <tr key={orcamento.chave} className="hover:bg-slate-50">
+                  <td className="px-4 py-3 font-bold text-slate-900">
+                    {orcamento.numeroOrcamento}
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">
+                    {orcamento.cliente}
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">
+                    {orcamento.segmento}
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">
+                    {orcamento.estado}
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">
+                    {formatarData(orcamento.dataFechamento)}
+                  </td>
+                  <td className="px-4 py-3 text-right font-bold text-slate-900">
+                    {formatarMoeda(orcamento.valor)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="sticky bottom-0 border-t border-slate-200 bg-slate-50">
+              <tr>
+                <td
+                  colSpan={5}
+                  className="px-4 py-2 text-right text-xs font-bold uppercase text-slate-500"
+                >
+                  Total realizado
+                </td>
+                <td className="px-4 py-2 text-right font-extrabold text-slate-900">
+                  {formatarMoeda(vendedor.realizado)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      ) : (
+        <p className="border-t border-slate-200 bg-white px-4 py-4 text-sm font-medium text-slate-500">
+          Nenhum orçamento fechado para este vendedor no período filtrado.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function MetasPorVendedor({ metas }: { metas: FunilMetasResumo }) {
   const [vendedorSelecionado, setVendedorSelecionado] = useState<string | null>(
     null
-  );
-  const vendedorDetalhado = metas.vendedores.find(
-    (item) => item.vendedorEmail === vendedorSelecionado
   );
 
   if (metas.vendedores.length === 0) {
@@ -515,123 +619,38 @@ function MetasPorVendedor({ metas }: { metas: FunilMetasResumo }) {
             </tr>
           </thead>
           <tbody>
-            {metas.vendedores.map((item) => (
-              <LinhaMetaVendedor
-                key={item.vendedorEmail}
-                item={item}
-                selecionado={item.vendedorEmail === vendedorSelecionado}
-                onSelecionar={() =>
-                  setVendedorSelecionado((emailAtual) =>
-                    emailAtual === item.vendedorEmail
-                      ? null
-                      : item.vendedorEmail
-                  )
-                }
-              />
-            ))}
+            {metas.vendedores.map((item) => {
+              const selecionado = item.vendedorEmail === vendedorSelecionado;
+
+              return (
+                <Fragment key={item.vendedorEmail}>
+                  <LinhaMetaVendedor
+                    item={item}
+                    selecionado={selecionado}
+                    onSelecionar={() =>
+                      setVendedorSelecionado((emailAtual) =>
+                        emailAtual === item.vendedorEmail
+                          ? null
+                          : item.vendedorEmail
+                      )
+                    }
+                  />
+                  {selecionado ? (
+                    <tr>
+                      <td colSpan={5} className="p-0">
+                        <DetalheOrcamentosVendedor
+                          vendedor={item}
+                          onFechar={() => setVendedorSelecionado(null)}
+                        />
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>
-
-      {vendedorDetalhado ? (
-        <div className="border-t border-slate-200 bg-slate-50">
-          <div className="flex items-start justify-between gap-3 px-4 py-3">
-            <div>
-              <h4 className="text-sm font-extrabold text-slate-900">
-                Orçamentos fechados
-              </h4>
-              <p className="mt-1 text-xs font-medium text-slate-500">
-                {vendedorDetalhado.vendedorEmail} ·{' '}
-                {formatarNumero(vendedorDetalhado.orcamentosFechados.length)}{' '}
-                orçamento(s)
-              </p>
-            </div>
-            <button
-              type="button"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-lg text-slate-600 shadow-sm hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-              title="Fechar detalhamento"
-              aria-label="Fechar detalhamento dos orçamentos"
-              onClick={() => setVendedorSelecionado(null)}
-            >
-              ×
-            </button>
-          </div>
-
-          {vendedorDetalhado.orcamentosFechados.length > 0 ? (
-            <div className="max-h-80 overflow-auto border-t border-slate-200 bg-white">
-              <table className="w-full min-w-[820px] text-sm">
-                <caption className="sr-only">
-                  Orçamentos fechados de {vendedorDetalhado.vendedorEmail} no
-                  período filtrado.
-                </caption>
-                <thead className="sticky top-0 border-b border-slate-200 bg-white text-xs text-slate-500">
-                  <tr>
-                    <th scope="col" className="px-4 py-2 text-left font-bold">
-                      Orçamento
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-left font-bold">
-                      Cliente
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-left font-bold">
-                      Segmento
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-left font-bold">
-                      UF
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-left font-bold">
-                      Fechamento
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-bold">
-                      Valor
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {vendedorDetalhado.orcamentosFechados.map((orcamento) => (
-                    <tr key={orcamento.chave} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 font-bold text-slate-900">
-                        {orcamento.numeroOrcamento}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {orcamento.cliente}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {orcamento.segmento}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {orcamento.estado}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {formatarData(orcamento.dataFechamento)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold text-slate-900">
-                        {formatarMoeda(orcamento.valor)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="sticky bottom-0 border-t border-slate-200 bg-slate-50">
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="px-4 py-2 text-right text-xs font-bold uppercase text-slate-500"
-                    >
-                      Total realizado
-                    </td>
-                    <td className="px-4 py-2 text-right font-extrabold text-slate-900">
-                      {formatarMoeda(vendedorDetalhado.realizado)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          ) : (
-            <p className="border-t border-slate-200 bg-white px-4 py-4 text-sm font-medium text-slate-500">
-              Nenhum orçamento fechado para este vendedor no período filtrado.
-            </p>
-          )}
-        </div>
-      ) : null}
     </div>
   );
 }
