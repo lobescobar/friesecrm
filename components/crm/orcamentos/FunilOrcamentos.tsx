@@ -405,6 +405,9 @@ function LinhaMetaVendedor({
   onSelecionar: () => void;
 }) {
   const largura = Math.min(Math.max(item.percentual, item.realizado > 0 ? 4 : 0), 100);
+  const estadosOrdenados = [...item.estados].sort((estadoA, estadoB) =>
+    estadoA.localeCompare(estadoB, 'pt-BR')
+  );
 
   return (
     <tr
@@ -433,7 +436,7 @@ function LinhaMetaVendedor({
             <span className="mt-1 block text-[11px] font-medium text-slate-500">
               Seg.:{' '}
               {item.segmentos.length ? item.segmentos.join(', ') : 'Todos'} · UF:{' '}
-              {item.estados.length ? item.estados.join(', ') : 'Todos'}
+              {estadosOrdenados.length ? estadosOrdenados.join(', ') : 'Todos'}
             </span>
           </span>
         </button>
