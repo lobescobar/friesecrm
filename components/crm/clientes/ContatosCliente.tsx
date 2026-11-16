@@ -1,10 +1,12 @@
-﻿'use client';
+'use client';
 
 import { useId, useState } from 'react';
 import { Contato } from '../../../types';
 import { emailValido, telefoneValido } from '../../../utils/validators';
 import { formatarTelefone, montarLinkWhatsapp } from '../../../utils/formatters';
 import Button from '../../ui/Button';
+
+const LIMITE_CONTATOS = 9;
 
 type FormContato = {
   nome: string;
@@ -81,8 +83,8 @@ export default function ContatosCliente({
       return;
     }
 
-    if (contatos.length >= 3) {
-      setMensagem('Limite de 3 contatos por cliente atingido.');
+    if (contatos.length >= LIMITE_CONTATOS) {
+      setMensagem(`Limite de ${LIMITE_CONTATOS} contatos por cliente atingido.`);
       return;
     }
 
@@ -226,9 +228,9 @@ export default function ContatosCliente({
 
         <span
           className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold"
-          aria-label={`${contatos.length} de 3 contatos cadastrados`}
+          aria-label={`${contatos.length} de ${LIMITE_CONTATOS} contatos cadastrados`}
         >
-          {contatos.length}/3 cadastrados
+          {contatos.length}/{LIMITE_CONTATOS} cadastrados
         </span>
       </div>
 
@@ -317,7 +319,7 @@ export default function ContatosCliente({
         <Button
           type="button"
           onClick={adicionar}
-          disabled={salvando || contatos.length >= 3}
+          disabled={salvando || contatos.length >= LIMITE_CONTATOS}
           loading={salvando}
           loadingText="Adicionando contato..."
           className="mt-3 w-full"
@@ -325,9 +327,9 @@ export default function ContatosCliente({
           Adicionar Contato
         </Button>
 
-        {contatos.length >= 3 ? (
+        {contatos.length >= LIMITE_CONTATOS ? (
           <p className="mt-2 text-xs text-amber-700" role="status">
-            Limite de 3 contatos por cliente atingido.
+            Limite de {LIMITE_CONTATOS} contatos por cliente atingido.
           </p>
         ) : null}
       </div>
