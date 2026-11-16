@@ -3,6 +3,7 @@ import { registrarAuditoriaImportacao } from './auditoria';
 import { montarOrigemImportacaoOrcamentos } from './origemImportacaoOrcamentos';
 import { supabase } from './supabase';
 import {
+  MESES_COMPRA_CLIENTE_ATIVO,
   MESES_STATUS_CLIENTE_ATIVO
 } from '../utils/constants';
 import {
@@ -118,6 +119,12 @@ function calcularDataLimiteStatusCliente() {
   return data.toISOString().slice(0, 10);
 }
 
+function calcularDataLimiteCompraCliente() {
+  const data = new Date();
+  data.setMonth(data.getMonth() - MESES_COMPRA_CLIENTE_ATIVO);
+  return data.toISOString().slice(0, 10);
+}
+
 async function buscarClientesComOrcamentoRecente(
   dataLimite: string,
   origemImportacao: string | null
@@ -162,6 +169,54 @@ async function buscarClientesComOrcamentoRecente(
   return Array.from(clientesAtivos);
 }
 
+async function buscarClientesComCompraRecente(
+  dataLimite: string,
+  origemImportacao: string | null
+) {
+  const clientesCompradores = new Set<string>();
+  const tamanhoPagina = 1000;
+  let inicio = 0;
+
+  while (true) {
+    let query = supabase
+      .from('orcamentos_historico')
+      .select('cliente_id')
+      .eq('status', 'B')
+      .not('cliente_id', 'is', null)
+      .not('data_fechamento', 'is', null)
+      .gte('data_fechamento', dataLimite);
+
+    if (origemImportacao) {
+      query = query.eq('origem_importacao', origemImportacao);
+    }
+
+    const { data, error } = await query.range(
+      inicio,
+      inicio + tamanhoPagina - 1
+    );
+
+    if (error) {
+      throw error;
+    }
+
+    const pagina = (data || []) as Array<{ cliente_id: string | null }>;
+
+    pagina.forEach((linha) => {
+      if (linha.cliente_id) {
+        clientesCompradores.add(linha.cliente_id);
+      }
+    });
+
+    if (pagina.length < tamanhoPagina) {
+      break;
+    }
+
+    inicio += tamanhoPagina;
+  }
+
+  return Array.from(clientesCompradores);
+}
+
 async function atualizarStatusClientesEmLotes(
   clienteIds: string[],
   status: 'Ativo' | 'Inativo'
@@ -180,19 +235,40 @@ async function atualizarStatusClientesEmLotes(
   }
 }
 
+async function atualizarCompraRecenteClientesEmLotes(clienteIds: string[]) {
+  for (const lote of lotes(clienteIds, 500)) {
+    const { error } = await supabase
+      .from('clientes')
+      .update({
+        comprou_ultimos_12_meses: true
+      })
+      .in('id', lote);
+
+    if (error) {
+      throw error;
+    }
+  }
+}
+
 async function recalcularStatusClientesPorHistorico(
   origemImportacao: string | null
 ) {
-  const dataLimite = calcularDataLimiteStatusCliente();
-  const clientesAtivos = await buscarClientesComOrcamentoRecente(
-    dataLimite,
-    origemImportacao
-  );
+  const [clientesAtivos, clientesCompradores] = await Promise.all([
+    buscarClientesComOrcamentoRecente(
+      calcularDataLimiteStatusCliente(),
+      origemImportacao
+    ),
+    buscarClientesComCompraRecente(
+      calcularDataLimiteCompraCliente(),
+      origemImportacao
+    )
+  ]);
 
   const { error: erroInativos } = await supabase
     .from('clientes')
     .update({
-      status: 'Inativo'
+      status: 'Inativo',
+      comprou_ultimos_12_meses: false
     })
     .not('id', 'is', null);
 
@@ -201,6 +277,7 @@ async function recalcularStatusClientesPorHistorico(
   }
 
   await atualizarStatusClientesEmLotes(clientesAtivos, 'Ativo');
+  await atualizarCompraRecenteClientesEmLotes(clientesCompradores);
 
   return {
     clientesAtivos: clientesAtivos.length

@@ -150,7 +150,10 @@ export default function TabelaClientes({
                 </td>
 
                 <td className="px-4 py-3">
-                  <BadgeStatus status={cliente.status} />
+                  <BadgeStatus
+                    status={cliente.status}
+                    comprouUltimos12Meses={cliente.comprou_ultimos_12_meses}
+                  />
                 </td>
               </tr>
             ))}

@@ -20,7 +20,10 @@ export default function ClienteCardMobile({
             Cód. ERP: {cliente.codigo_cliente || '-'}
           </p>
         </div>
-        <BadgeStatus status={cliente.status} />
+        <BadgeStatus
+          status={cliente.status}
+          comprouUltimos12Meses={cliente.comprou_ultimos_12_meses}
+        />
       </div>
 
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">

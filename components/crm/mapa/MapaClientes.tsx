@@ -61,6 +61,7 @@ const icones = Object.entries(STATUS_COLORS).reduce((acc, [key, value]) => {
   acc[key as StatusType] = criarIcone(value.hex);
   return acc;
 }, {} as Record<StatusType, L.DivIcon>);
+const iconeAtivoSemCompraRecente = criarIcone('#d97706');
 
 function normalizarStatusCliente(status?: string | null): StatusType {
   return status === 'Ativo' ? 'Ativo' : 'Inativo';
@@ -172,7 +173,10 @@ export default function MapaClientes({
 
         {clientesComCoordenadas.map((cliente) => {
           const status = normalizarStatusCliente(cliente.status);
-          const icone = icones[status] || icones.Inativo;
+          const icone =
+            status === 'Ativo' && cliente.comprou_ultimos_12_meses === false
+              ? iconeAtivoSemCompraRecente
+              : icones[status] || icones.Inativo;
 
           return (
             <Marker

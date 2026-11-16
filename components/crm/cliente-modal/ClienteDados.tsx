@@ -92,11 +92,13 @@ export default function ClienteDados({
             Status
           </dt>
           <dd className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <BadgeStatus status={status} />
+            <BadgeStatus
+              status={status}
+              comprouUltimos12Meses={cliente.comprou_ultimos_12_meses}
+            />
             <span className="text-xs text-slate-500">
-              Ativo se houver orçamento emitido nos últimos{' '}
-              {MESES_STATUS_CLIENTE_ATIVO} meses. Sem histórico recente:
-              Inativo.
+              Verde: orçamento em {MESES_STATUS_CLIENTE_ATIVO} meses e compra
+              em 12 meses. Amarelo: orçamento recente sem compra em 12 meses.
             </span>
           </dd>
         </div>

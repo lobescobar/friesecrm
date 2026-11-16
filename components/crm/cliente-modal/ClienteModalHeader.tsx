@@ -22,7 +22,10 @@ export default function ClienteModalHeader({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <BadgeStatus status={status} />
+            <BadgeStatus
+              status={status}
+              comprouUltimos12Meses={cliente.comprou_ultimos_12_meses}
+            />
 
             {cliente.segmento ? (
               <span className="rounded-full border border-white/20 bg-white/10 px-2 py-1 text-xs font-semibold text-white">

@@ -22,7 +22,7 @@ function montarChaveCacheClientes(profile: Profile | null) {
     .join(',');
   const estados = [...(profile.estados_permitidos || [])].sort().join(',');
 
-  return `clientes:${profile.id}:${profile.role}:${segmentos}:${estados}`;
+  return `clientes:v2-compra-recente:${profile.id}:${profile.role}:${segmentos}:${estados}`;
 }
 
 export function useClientes(profile: Profile | null) {

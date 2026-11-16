@@ -11,6 +11,7 @@ export interface Cliente {
   cidade?: string | null;
   estado?: string | null;
   status: StatusType | string;
+  comprou_ultimos_12_meses?: boolean | null;
   endereco?: string | null;
   observacoes?: string | null;
   latitude?: string | null;

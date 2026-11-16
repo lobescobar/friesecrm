@@ -55,7 +55,10 @@ export default function ClienteResumo({
             </p>
           </div>
 
-          <BadgeStatus status={status} />
+          <BadgeStatus
+            status={status}
+            comprouUltimos12Meses={cliente.comprou_ultimos_12_meses}
+          />
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
