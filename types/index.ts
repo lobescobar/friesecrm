@@ -14,6 +14,10 @@ export interface Cliente {
   comprou_ultimos_12_meses?: boolean | null;
   endereco?: string | null;
   observacoes?: string | null;
+  observacoes_lembrete_em?: string | null;
+  observacoes_lembrete_processando_em?: string | null;
+  observacoes_lembrete_enviado_em?: string | null;
+  observacoes_lembrete_responsavel_email?: string | null;
   latitude?: string | null;
   longitude?: string | null;
   telefone?: string | null;

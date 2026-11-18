@@ -28,6 +28,12 @@ type EquipamentoClienteLembrete = {
   historico: string | null;
 };
 
+type ClienteObservacaoLembrete = {
+  id: string;
+  observacoes: string | null;
+  observacoes_lembrete_em: string | null;
+};
+
 type ClienteCarteira = {
   id: string;
   estado: string | null;
@@ -205,6 +211,31 @@ function montarCorpoEmailEquipamento(
   ].join('\n');
 }
 
+function montarCorpoEmailObservacao(
+  lembrete: ClienteObservacaoLembrete,
+  cliente: ClienteCarteira
+) {
+  const nomeCliente =
+    cliente.nome_fantasia ||
+    cliente.empresa ||
+    cliente.razao_social ||
+    'Cliente não identificado';
+
+  return [
+    'Lembrete de cliente',
+    '',
+    `Cliente: ${nomeCliente}`,
+    `Data do lembrete: ${formatarDataHoraBrasileira(
+      lembrete.observacoes_lembrete_em || ''
+    )}`,
+    '',
+    'Observação:',
+    lembrete.observacoes?.trim() || '-',
+    '',
+    'Este é um lembrete automático do CRM Friese.'
+  ].join('\n');
+}
+
 export async function GET(request: NextRequest) {
   const erroAutorizacao = validarCron(request);
 
@@ -217,13 +248,21 @@ export async function GET(request: NextRequest) {
   const ate = new Date(agora.getTime() + JANELA_ENVIO_MS);
   const agoraIso = agora.toISOString();
 
-  const [resultadoInteracoes, resultadoEquipamentos] = await Promise.all([
+  const [
+    resultadoInteracoes,
+    resultadoEquipamentos,
+    resultadoObservacoes
+  ] = await Promise.all([
     supabase.rpc('crm_claim_lembretes_acoes', {
       p_agora: agoraIso,
       p_ate: ate.toISOString(),
       p_limite: 100
     }),
     supabase.rpc('crm_claim_lembretes_equipamentos', {
+      p_agora: agoraIso,
+      p_limite: 100
+    }),
+    supabase.rpc('crm_claim_lembretes_observacoes', {
       p_agora: agoraIso,
       p_limite: 100
     })
@@ -233,8 +272,14 @@ export async function GET(request: NextRequest) {
     []) as OrcamentoInteracaoLembrete[];
   const equipamentos = (resultadoEquipamentos.data ||
     []) as EquipamentoClienteLembrete[];
+  const lembretesObservacoes = (resultadoObservacoes.data ||
+    []) as ClienteObservacaoLembrete[];
 
-  if (resultadoInteracoes.error || resultadoEquipamentos.error) {
+  if (
+    resultadoInteracoes.error ||
+    resultadoEquipamentos.error ||
+    resultadoObservacoes.error
+  ) {
     await Promise.all([
       ...interacoes.map((interacao) =>
         supabase
@@ -249,11 +294,20 @@ export async function GET(request: NextRequest) {
           .update({ lembrete_processando_em: null })
           .eq('id', equipamento.id)
           .eq('lembrete_processando_em', agoraIso)
+      ),
+      ...lembretesObservacoes.map((lembrete) =>
+        supabase
+          .from('clientes')
+          .update({ observacoes_lembrete_processando_em: null })
+          .eq('id', lembrete.id)
+          .eq('observacoes_lembrete_processando_em', agoraIso)
       )
     ]);
 
     const erroReserva =
-      resultadoInteracoes.error || resultadoEquipamentos.error;
+      resultadoInteracoes.error ||
+      resultadoEquipamentos.error ||
+      resultadoObservacoes.error;
     console.error('Erro ao reservar lembretes pendentes:', erroReserva);
     return NextResponse.json(
       { error: erroReserva?.message || 'Erro ao reservar lembretes.' },
@@ -264,7 +318,8 @@ export async function GET(request: NextRequest) {
   const clienteIds = [
     ...new Set([
       ...interacoes.map((item) => item.cliente_id),
-      ...equipamentos.map((item) => item.cliente_id)
+      ...equipamentos.map((item) => item.cliente_id),
+      ...lembretesObservacoes.map((item) => item.id)
     ])
   ];
 
@@ -299,6 +354,13 @@ export async function GET(request: NextRequest) {
           .update({ lembrete_processando_em: null })
           .eq('id', equipamento.id)
           .eq('lembrete_processando_em', agoraIso)
+      ),
+      ...lembretesObservacoes.map((lembrete) =>
+        supabase
+          .from('clientes')
+          .update({ observacoes_lembrete_processando_em: null })
+          .eq('id', lembrete.id)
+          .eq('observacoes_lembrete_processando_em', agoraIso)
       )
     ]);
 
@@ -322,6 +384,9 @@ export async function GET(request: NextRequest) {
   const equipamentosIgnorados: Array<{ id: string; motivo: string }> = [];
   const erros: Array<{ id: string; mensagem: string }> = [];
   const errosEquipamentos: Array<{ id: string; mensagem: string }> = [];
+  const observacoesEnviadas: Array<{ id: string; cliente: string }> = [];
+  const observacoesIgnoradas: Array<{ id: string; motivo: string }> = [];
+  const errosObservacoes: Array<{ id: string; mensagem: string }> = [];
 
   for (const interacao of interacoes) {
     const cliente = clientes.get(interacao.cliente_id);
@@ -457,16 +522,101 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  for (const lembrete of lembretesObservacoes) {
+    const cliente = clientes.get(lembrete.id);
+    const vendedor = cliente
+      ? escolherVendedorResponsavel(cliente, vendedores)
+      : null;
+    const destinatario = vendedor?.email.trim().toLowerCase() || '';
+    const observacao = lembrete.observacoes?.trim() || '';
+    const dataLembrete = lembrete.observacoes_lembrete_em || '';
+
+    if (
+      !cliente ||
+      !validarEmail(destinatario) ||
+      !observacao ||
+      !dataLembrete
+    ) {
+      const motivo = !cliente
+        ? 'cliente_nao_encontrado'
+        : !validarEmail(destinatario)
+          ? 'vendedor_responsavel_sem_email'
+          : 'observacao_ou_data_ausente';
+
+      await supabase
+        .from('clientes')
+        .update({ observacoes_lembrete_processando_em: null })
+        .eq('id', lembrete.id)
+        .eq('observacoes_lembrete_processando_em', agoraIso);
+
+      observacoesIgnoradas.push({ id: lembrete.id, motivo });
+      continue;
+    }
+
+    try {
+      await enviarEmailMicrosoft365({
+        destinatarios: [destinatario],
+        assunto: 'Lembrete de cliente',
+        corpo: montarCorpoEmailObservacao(lembrete, cliente)
+      });
+
+      const { error: erroAtualizacao } = await supabase
+        .from('clientes')
+        .update({
+          observacoes_lembrete_responsavel_email: destinatario,
+          observacoes_lembrete_processando_em: null,
+          observacoes_lembrete_enviado_em: new Date().toISOString()
+        })
+        .eq('id', lembrete.id)
+        .eq('observacoes_lembrete_processando_em', agoraIso)
+        .is('observacoes_lembrete_enviado_em', null);
+
+      if (erroAtualizacao) {
+        throw erroAtualizacao;
+      }
+
+      observacoesEnviadas.push({
+        id: lembrete.id,
+        cliente:
+          cliente.nome_fantasia ||
+          cliente.empresa ||
+          cliente.razao_social ||
+          lembrete.id
+      });
+    } catch (erro) {
+      await supabase
+        .from('clientes')
+        .update({ observacoes_lembrete_processando_em: null })
+        .eq('id', lembrete.id)
+        .eq('observacoes_lembrete_processando_em', agoraIso)
+        .is('observacoes_lembrete_enviado_em', null);
+
+      const mensagem =
+        erro instanceof Error ? erro.message : 'Erro inesperado no envio.';
+
+      console.error('Erro ao enviar lembrete de observação:', erro);
+      errosObservacoes.push({ id: lembrete.id, mensagem });
+    }
+  }
+
   return NextResponse.json({
-    ok: erros.length === 0 && errosEquipamentos.length === 0,
-    processados: interacoes.length + equipamentos.length,
+    ok:
+      erros.length === 0 &&
+      errosEquipamentos.length === 0 &&
+      errosObservacoes.length === 0,
+    processados:
+      interacoes.length + equipamentos.length + lembretesObservacoes.length,
     processadosAcoes: interacoes.length,
     processadosEquipamentos: equipamentos.length,
+    processadosObservacoes: lembretesObservacoes.length,
     enviados,
     equipamentosEnviados,
+    observacoesEnviadas,
     ignorados,
     equipamentosIgnorados,
+    observacoesIgnoradas,
     erros,
-    errosEquipamentos
+    errosEquipamentos,
+    errosObservacoes
   });
 }

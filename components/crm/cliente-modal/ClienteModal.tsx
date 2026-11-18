@@ -50,6 +50,25 @@ function obterNomePrincipal(cliente: Cliente) {
   );
 }
 
+function converterIsoParaDataHoraLocal(valor?: string | null) {
+  if (!valor) return '';
+
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return '';
+
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  })
+    .format(data)
+    .replace(' ', 'T');
+}
+
 export default function ClienteModal({
   cliente,
   contatos,
@@ -67,6 +86,9 @@ export default function ClienteModal({
   onExcluirContato
 }: ClienteModalProps) {
   const [observacoes, setObservacoes] = useState(cliente.observacoes || '');
+  const [lembreteObservacoes, setLembreteObservacoes] = useState(
+    converterIsoParaDataHoraLocal(cliente.observacoes_lembrete_em)
+  );
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState<string | null>(null);
   const [secaoAtiva, setSecaoAtiva] = useState<ClienteModalSecao>(
@@ -124,7 +146,12 @@ export default function ClienteModal({
     );
   };
 
-  const alterado = observacoes !== (cliente.observacoes || '');
+  const lembreteOriginal = converterIsoParaDataHoraLocal(
+    cliente.observacoes_lembrete_em
+  );
+  const lembreteAlterado = lembreteObservacoes !== lembreteOriginal;
+  const alterado =
+    observacoes !== (cliente.observacoes || '') || lembreteAlterado;
 
   const contatoEnderecoPadrao = useMemo(
     () =>
@@ -143,12 +170,28 @@ export default function ClienteModal({
   };
 
   const salvar = async () => {
+    if (
+      lembreteObservacoes &&
+      Number.isNaN(new Date(lembreteObservacoes).getTime())
+    ) {
+      setMensagem('Informe uma data e hora válidas para o lembrete.');
+      return;
+    }
+
+    if (lembreteObservacoes && !observacoes.trim()) {
+      setMensagem('Registre uma observação para programar o lembrete.');
+      return;
+    }
+
     setSalvando(true);
     setMensagem(null);
 
     try {
       await onAtualizarCliente(cliente.id, {
-        observacoes
+        observacoes,
+        observacoes_lembrete_em: lembreteObservacoes
+          ? new Date(lembreteObservacoes).toISOString()
+          : null
       });
 
       setMensagem('Alterações salvas com sucesso.');
@@ -207,7 +250,12 @@ export default function ClienteModal({
     return (
       <ClienteObservacoes
         observacoes={observacoes}
+        lembreteEm={lembreteObservacoes}
+        lembreteEnviadoEm={
+          lembreteAlterado ? null : cliente.observacoes_lembrete_enviado_em
+        }
         onChange={setObservacoes}
+        onLembreteChange={setLembreteObservacoes}
       />
     );
   };
