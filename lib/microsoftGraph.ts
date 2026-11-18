@@ -59,8 +59,11 @@ export async function enviarEmailMicrosoft365(params: {
   destinatarios: string[];
   assunto: string;
   corpo: string;
+  remetente?: string;
 }) {
-  const remetente = lerVariavelObrigatoria('MICROSOFT_MAIL_SENDER');
+  const remetente =
+    params.remetente?.trim() ||
+    lerVariavelObrigatoria('MICROSOFT_MAIL_SENDER');
   const token = await obterTokenMicrosoftGraph();
 
   const destinatarios = Array.from(

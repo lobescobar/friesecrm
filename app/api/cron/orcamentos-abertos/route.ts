@@ -216,7 +216,10 @@ export async function GET(request: NextRequest) {
         await enviarEmailMicrosoft365({
           destinatarios: [destinatario],
           assunto: assunto(dataReferencia, modoTeste),
-          corpo: montarEmailResumoOrcamentosAbertos(item, dataReferencia)
+          corpo: montarEmailResumoOrcamentosAbertos(item, dataReferencia),
+          remetente:
+            process.env.REMINDER_MAIL_SENDER?.trim() ||
+            (modoTeste ? destinatarioTeste : undefined)
         });
 
         const { error: erroAtualizacao } = await supabase
